@@ -102,6 +102,7 @@
       <FloatingPointModel>Strict</FloatingPointModel>
       <AdditionalOptions>
       </AdditionalOptions>
+      <AdditionalIncludeDirectories>%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
