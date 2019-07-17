@@ -1,0 +1,6 @@
+/bin/*.exe
+/bin/*.exp
+/src/platform/win/.vs/OpenLara/v15/*.suo
+/src/platform/win/.vs
+/src/platform/win/Debug/OpenLara.tlog/*.tlog
+/src/platform/win/Debug
