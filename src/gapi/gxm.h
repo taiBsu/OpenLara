@@ -432,7 +432,6 @@ namespace GAPI {
     #include "shaders/gxm/shaders.h"
 
     static const int bindings[uMAX] = {
-        94, // uFlags
          0, // uParam
          1, // uTexParam
          2, // uViewProj
@@ -473,24 +472,17 @@ namespace GAPI {
         bool rebind;
 
         void init(Pass pass, int type, int *def, int defCount) {
-			LOG("init shader %d %d ", int(pass), int(type));
             memset(pso, 0, sizeof(pso));
 
             outputFmt = SCE_GXM_OUTPUT_REGISTER_FORMAT_UCHAR4;
-
-            float *flags = (float*)(cbMem + bindings[uFlags]);
 
             bool underwater = false;
             bool alphatest  = false;
 
             for (int i = 0; i < defCount; i++) {
                 switch (def[i]) {
-                    case SD_UNDERWATER      : underwater = true; break;
-                    case SD_ALPHA_TEST      : alphatest  = true; break;
-                    case SD_OPT_AMBIENT     : flags[0] = 1.0f; break;
-                    case SD_OPT_SHADOW      : flags[1] = 1.0f; break;
-                    case SD_OPT_CONTACT     : flags[2] = 1.0f; break;
-                    case SD_OPT_CAUSTICS    : flags[3] = 1.0f; break;
+                    case SD_UNDERWATER : underwater = true; break;
+                    case SD_ALPHA_TEST : alphatest  = true; break;
                 }
             }
 
@@ -514,7 +506,7 @@ namespace GAPI {
                 case passShadow : 
                     switch (type) {
                         case 3  : 
-						case 4  : vSrc = SHADER ( shadow_entity, v );  fSrc = SHADER ( shadow_entity, f ); break;
+                        case 4  : vSrc = SHADER ( shadow_entity, v );  fSrc = SHADER ( shadow_entity, f ); break;
                         default : ASSERT(false);
                     }
                     break;
@@ -543,16 +535,15 @@ namespace GAPI {
                         case 1  : vSrc = SHADER ( filter_downsample, v );  fSrc = SHADER ( filter_downsample, f ); break;
                         case 3  : vSrc = SHADER ( filter_grayscale,  v );  fSrc = SHADER ( filter_grayscale,  f ); break;
                         case 4  : vSrc = SHADER ( filter_blur,       v );  fSrc = SHADER ( filter_blur,       f ); break;
+                        case 5  : vSrc = SHADER ( filter_blur,       v );  fSrc = SHADER ( filter_blur,       f ); break;
                         default : ASSERT(false);
                     }
                     break;
                 case passGUI    : vSrc = SHADER ( gui,   v );  fSrc = SHADER ( gui,   f ); break;
-				case passSky    : vSrc = SHADER ( gui,   v );  fSrc = SHADER ( gui,   f ); break;
+                case passSky    : vSrc = SHADER ( gui,   v );  fSrc = SHADER ( gui,   f ); break;
                 case PASS_CLEAR : vSrc = SHADER ( clear, v );  fSrc = SHADER ( clear, f ); break;
                 default         : ASSERT(false); LOG("! wrong pass id\n"); return;
             }
-
-			LOG("  %s", vSrc != NULL ? "true" : "false");
 
             #undef SHADER_A
             #undef SHADER_U
@@ -609,8 +600,6 @@ namespace GAPI {
             }
 
             colorMask = blendMode = -1;
-
-			LOG("done\n");
         }
 
         void deinit() {
@@ -697,7 +686,6 @@ namespace GAPI {
                 active.shader = this;
 
                 memset(cbCount, 0, sizeof(cbCount));
-                cbCount[uFlags] = 16;
 
                 rebind = true;
             }
@@ -778,9 +766,9 @@ namespace GAPI {
             bool mipmaps    = (opt & OPT_MIPMAPS) != 0;
             bool isCube     = (opt & OPT_CUBEMAP) != 0;
             bool isTarget   = (opt & OPT_TARGET)  != 0;
-            bool isShadow   = fmt == FMT_SHADOW;
+            bool isDynamic  = (opt & OPT_DYNAMIC) != 0;
             bool isTiled    = isTarget;
-            bool isSwizzled = !isTiled && filter;
+            bool isSwizzled = !isDynamic && !isTiled && filter;
 
             FormatDesc desc = formats[fmt];
 
@@ -825,7 +813,7 @@ namespace GAPI {
                 size *= 6;
             }
 
-            SceGxmMemoryAttribFlags flags = (isTarget || mipCount > 1) ? SCE_GXM_MEMORY_ATTRIB_RW : SCE_GXM_MEMORY_ATTRIB_READ;
+            SceGxmMemoryAttribFlags flags = (isTarget || isDynamic || mipCount > 1) ? SCE_GXM_MEMORY_ATTRIB_RW : SCE_GXM_MEMORY_ATTRIB_READ;
             this->data = (uint8*)Context::allocGPU(SCE_KERNEL_MEMBLOCK_TYPE_USER_CDRAM_RW, size, flags, &uid);
 
             if (data && this->data) {
@@ -869,7 +857,7 @@ namespace GAPI {
             if (opt & OPT_REPEAT) {
                 addrMode = SCE_GXM_TEXTURE_ADDR_REPEAT;
             } else {
-                addrMode = (isShadow && support.texBorder) ? SCE_GXM_TEXTURE_ADDR_CLAMP_FULL_BORDER : SCE_GXM_TEXTURE_ADDR_CLAMP;
+                addrMode = SCE_GXM_TEXTURE_ADDR_CLAMP;
             }
 
             sceGxmTextureSetUAddrMode(&ID, addrMode);
@@ -1135,7 +1123,6 @@ namespace GAPI {
         support.colorHalf      = true;
         support.texHalfLinear  = true;
         support.texHalf        = true;
-        support.clipDist       = true;
 
         Core::width  = DISPLAY_WIDTH;
         Core::height = DISPLAY_HEIGHT;
@@ -1205,15 +1192,19 @@ namespace GAPI {
         sceGxmTerminate();
     }
 
+    inline mat4::ProjRange getProjRange() {
+        return mat4::PROJ_NEG_POS;
+    }
+
     mat4 ortho(float l, float r, float b, float t, float znear, float zfar) {
         mat4 m;
-        m.ortho(mat4::PROJ_ZERO_POS, l, r, b, t, znear, zfar);
+        m.ortho(getProjRange(), l, r, b, t, znear, zfar);
         return m;
     }
 
     mat4 perspective(float fov, float aspect, float znear, float zfar, float eye) {
         mat4 m;
-        m.perspective(mat4::PROJ_ZERO_POS, fov, aspect, znear, zfar, eye);
+        m.perspective(getProjRange(), fov, aspect, znear, zfar, eye);
         return m;
     }
 
@@ -1284,7 +1275,7 @@ namespace GAPI {
 
             sceGxmBeginScene(Context::gxmContext, flags, target->renderTarget, NULL, NULL, NULL, colorSurface, &target->depthSurface);
         }
-        active.viewport = Viewport(0, 0, 0, 0); // forcing viewport reset
+        active.viewport = short4(0, 0, 0, 0); // forcing viewport reset
     }
 
     void discardTarget(bool color, bool depth) {}
@@ -1304,12 +1295,16 @@ namespace GAPI {
         Context::checkPendings();
     }
 
-    void setViewport(const Viewport &vp) {
+    void setViewport(const short4 &v) {
         int vh = active.target ? active.target->height : Core::height;
-        int sw = vp.width  / 2;
-        int sh = vp.height / 2;
-        sceGxmSetViewport(Context::gxmContext, float(vp.x + sw), float(sw), float(vh - vp.y - sh), float(-sh), 0.0f, 1.0f);
-        sceGxmSetRegionClip(Context::gxmContext, SCE_GXM_REGION_CLIP_OUTSIDE, vp.x, vh - vp.y - vp.height, vp.x + vp.width, vp.y + vp.height);
+        int sw = v.z / 2;
+        int sh = v.w / 2;
+        sceGxmSetViewport(Context::gxmContext, float(v.x + sw), float(sw), float(vh - v.y - sh), float(-sh), 0.0f, 1.0f);
+    }
+
+    void setScissor(const short4 &s) {
+        //int vh = active.target ? active.target->height : Core::height;
+        //sceGxmSetRegionClip(Context::gxmContext, SCE_GXM_REGION_CLIP_OUTSIDE, 0, 0, 256, 256);
     }
 
     void setDepthTest(bool enable) {
@@ -1369,6 +1364,7 @@ namespace GAPI {
     }
 
     void clear(bool color, bool depth) {
+        // TODO save and restore states
         int  oColorMask  = colorMask;
         int  oBlendMode  = blendMode;
         bool oDepthTest  = depthTest;

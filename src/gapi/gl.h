@@ -4,12 +4,13 @@
 #include "core.h"
 
 #if defined(_DEBUG) || defined(PROFILE)
-    //#define _DEBUG_SHADERS
+    //#define _DEBUG_SHADERS "../../OpenLara/src/shaders/"
 #endif
 
 #ifdef _OS_WIN
     #include <gl/GL.h>
     #include <gl/glext.h>
+    #include <gl/wglext.h>
 #elif _OS_ANDROID
     #include <dlfcn.h>
 
@@ -65,8 +66,8 @@
 #elif defined(__SDL2__) 
     #include <SDL2/SDL.h>
 
-    #if defined(_GAPI_GLES)
-        #define GL_GLEXT_PROTOTYPES 1
+    #if defined(_GAPI_GLES) // Default in SDL2 is GLES3. If we want GLES2, pass -D_GAPI_GLES2.
+    #if defined (_GAPI_GLES2) // We want GLES2 on SDL2
         #include <SDL2/SDL_opengles2.h>
         #include <SDL2/SDL_opengles2_gl2ext.h>
 
@@ -76,6 +77,8 @@
         #define GL_TEXTURE_COMPARE_MODE     0x884C
         #define GL_TEXTURE_COMPARE_FUNC     0x884D
         #define GL_COMPARE_REF_TO_TEXTURE   0x884E
+
+        #define GL_NUM_EXTENSIONS           0x821D
 
         #undef  GL_RG
         #undef  GL_RG32F
@@ -91,24 +94,41 @@
         #define GL_RG16F        GL_RGBA
         #define GL_HALF_FLOAT   GL_HALF_FLOAT_OES
 
+        #define GL_R8           GL_R8_EXT
+        #define GL_RED          GL_RED_EXT
+
         #define GL_TEXTURE_WRAP_R       0
         #define GL_DEPTH_STENCIL        GL_DEPTH_STENCIL_OES
         #define GL_UNSIGNED_INT_24_8    GL_UNSIGNED_INT_24_8_OES
+        //We need this on GLES2, too.
+        #define GL_TEXTURE_MAX_LEVEL     GL_TEXTURE_MAX_LEVEL_APPLE
 
         #define glTexImage3D(...) 0
         #ifndef GL_TEXTURE_3D // WUUUUUT!?
-            #define GL_TEXTURE_3D GL_TEXTURE_3D_OES
+        #define GL_TEXTURE_3D GL_TEXTURE_3D_OES
         #endif
 
-        #define glGenVertexArrays(...)
-        #define glDeleteVertexArrays(...)
-        #define glBindVertexArray(...)
-
         #define GL_PROGRAM_BINARY_LENGTH     GL_PROGRAM_BINARY_LENGTH_OES
-        #define glGetProgramBinary(...)
-        #define glProgramBinary(...)
-    #else
-        #define GL_GLEXT_PROTOTYPES 1
+    #else // We want GLES3 on SDL2
+        #include <GLES3/gl3.h>
+        #include <GLES3/gl3ext.h>
+        #include <GLES2/gl2ext.h>
+    #endif //GAPI_GLES2
+
+    // These are needed for both GLES2 and GLES3 on SDL2
+    #define glGenVertexArrays(...)
+    #define glDeleteVertexArrays(...)
+    #define glBindVertexArray(...)
+    #define glGetProgramBinary(...)
+    #define glProgramBinary(...)
+
+    #define PFNGLGENVERTEXARRAYSPROC    PFNGLGENVERTEXARRAYSOESPROC
+    #define PFNGLDELETEVERTEXARRAYSPROC PFNGLDELETEVERTEXARRAYSOESPROC
+    #define PFNGLBINDVERTEXARRAYPROC    PFNGLBINDVERTEXARRAYOESPROC
+    #define PFNGLGETPROGRAMBINARYPROC   PFNGLGETPROGRAMBINARYOESPROC
+    #define PFNGLPROGRAMBINARYPROC      PFNGLPROGRAMBINARYOESPROC
+
+    #else // We want OpenGL on SDL2, not GLES
         #include <SDL2/SDL_opengl.h>
         #include <SDL2/SDL_opengl_glext.h>
     #endif
@@ -116,6 +136,50 @@
 #elif defined(_OS_PSC)
     #include <GLES3/gl3.h>
     #include <GLES2/gl2ext.h>
+    extern EGLDisplay display;
+#elif defined(_OS_GCW0)
+    #include <GLES2/gl2.h>
+    #include <GLES2/gl2ext.h>
+    #include <EGL/egl.h>
+    #include <EGL/eglext.h>
+
+    #define GL_TEXTURE_MAX_LEVEL        GL_TEXTURE_MAX_LEVEL_APPLE
+    #define GL_TEXTURE_3D               0 
+    #define GL_TEXTURE_WRAP_R           0 
+    #define GL_TEXTURE_COMPARE_MODE     0x884C
+    #define GL_TEXTURE_COMPARE_FUNC     0x884D
+    #define GL_COMPARE_REF_TO_TEXTURE   0x884E
+
+    #undef  GL_RG
+    #undef  GL_RG32F
+    #undef  GL_RG16F
+    #undef  GL_RGBA32F
+    #undef  GL_RGBA16F
+    #undef  GL_HALF_FLOAT
+
+    #define GL_RG           GL_RGBA
+    #define GL_RGBA32F      GL_RGBA
+    #define GL_RGBA16F      GL_RGBA
+    #define GL_RG32F        GL_RGBA
+    #define GL_RG16F        GL_RGBA
+    #define GL_HALF_FLOAT   GL_HALF_FLOAT_OES
+
+    #define glTexImage3D(...) 0
+
+    #define GL_PROGRAM_BINARY_LENGTH     GL_PROGRAM_BINARY_LENGTH_OES
+
+    #define PFNGLGENVERTEXARRAYSPROC    PFNGLGENVERTEXARRAYSOESPROC
+    #define PFNGLDELETEVERTEXARRAYSPROC PFNGLDELETEVERTEXARRAYSOESPROC
+    #define PFNGLBINDVERTEXARRAYPROC    PFNGLBINDVERTEXARRAYOESPROC
+    #define PFNGLGETPROGRAMBINARYPROC   PFNGLGETPROGRAMBINARYOESPROC
+    #define PFNGLPROGRAMBINARYPROC      PFNGLPROGRAMBINARYOESPROC
+
+    #define glGenVertexArrays    glGenVertexArraysOES
+    #define glDeleteVertexArrays glDeleteVertexArraysOES
+    #define glBindVertexArray    glBindVertexArrayOES
+    #define glGetProgramBinary   glGetProgramBinaryOES
+    #define glProgramBinary      glProgramBinaryOES
+
     extern EGLDisplay display;
 #elif defined(_OS_RPI) || defined(_OS_CLOVER)
     #include <GLES2/gl2.h>
@@ -125,7 +189,7 @@
 
     #define GL_CLAMP_TO_BORDER          0x812D
     #define GL_TEXTURE_BORDER_COLOR     0x1004
-
+    #define GL_TEXTURE_MAX_LEVEL        GL_TEXTURE_MAX_LEVEL_APPLE
     #define GL_TEXTURE_COMPARE_MODE     0x884C
     #define GL_TEXTURE_COMPARE_FUNC     0x884D
     #define GL_COMPARE_REF_TO_TEXTURE   0x884E
@@ -158,7 +222,7 @@
     #define GL_PROGRAM_BINARY_LENGTH     GL_PROGRAM_BINARY_LENGTH_OES
     #define glGetProgramBinary(...)
     #define glProgramBinary(...)
-    
+
     extern EGLDisplay display;
 #elif _OS_SWITCH
     #define GL_GLEXT_PROTOTYPES
@@ -196,7 +260,7 @@
         #undef  GL_RG16F
         #undef  GL_HALF_FLOAT
 
-        #define RG              GL_RGBA
+        #define GL_RG           GL_RGBA
         #define GL_RG16F        GL_RGBA
         #define GL_RG32F        GL_RGBA
         #define GL_RGBA32F      GL_RGBA
@@ -207,32 +271,25 @@
         //#define GL_TEXTURE_COMPARE_FUNC     GL_TEXTURE_COMPARE_FUNC_EXT
         //#define GL_COMPARE_REF_TO_TEXTURE   GL_COMPARE_REF_TO_TEXTURE_EXT
     #else
-        #include <Carbon/Carbon.h>
         #include <AudioToolbox/AudioQueue.h>
-        #include <OpenGL/OpenGL.h>
-        #include <OpenGL/gl.h>
+        #include <OpenGL/gl3.h>
+        #include <OpenGL/gl3ext.h>
         #include <OpenGL/glext.h>
-        #include <AGL/agl.h>
 
-        #define GL_RG                       0x8227
-        #define GL_RG16F                    0x822F
-        #define GL_RG32F                    0x8230
-        #define GL_RGBA16F                  0x881A
-        #define GL_RGBA32F                  0x8814
-        #define GL_HALF_FLOAT               0x140B
+        // In OpenGL 2.1, the 16-bit RGB565 sized internal format is unavailable
+        // (because macOS doesn't provide the GL_ARB_ES2_compatibility extension),
+        // so use a 32-bit format for renderbuffer storage on macOS. See issue 360.
+        #undef GL_RGB565
+        #define GL_RGB565 GL_RGBA
 
-        #define GL_RGB565                   GL_RGBA
-        #define GL_TEXTURE_COMPARE_MODE     0x884C
-        #define GL_TEXTURE_COMPARE_FUNC     0x884D
-        #define GL_COMPARE_REF_TO_TEXTURE   0x884E
-
+        // In compatibility mode, macOS only provides OpenGL 2.1 (no VAO), but it does
+        // support the Apple-specific VAO extension which is older and in all relevant
+        // parts 100% compatible. So use those functions instead.
         #define glGenVertexArrays    glGenVertexArraysAPPLE
         #define glDeleteVertexArrays glDeleteVertexArraysAPPLE
         #define glBindVertexArray    glBindVertexArrayAPPLE
 
-        #define GL_PROGRAM_BINARY_LENGTH 0
-        #define glGetProgramBinary(...)  0
-        #define glProgramBinary(...)     0
+        #define GL_LUMINANCE 0x1909
     #endif
 #elif _OS_WEB
     #include <emscripten/emscripten.h>
@@ -248,23 +305,21 @@
     #define glProgramBinary(...)
 #endif
 
-#if defined(_OS_WIN) || defined(_OS_LINUX)
+#if defined(_OS_WIN) || defined(_OS_LINUX) || defined(_OS_GCW0) || (defined(__SDL2__) && (defined(_GAPI_GLES2) || defined(_SDL2_OPENGL)))
 
-    #ifdef _OS_ANDROID
-        #define GetProc(x) dlsym(libGL, x);
-    #else
-        void* GetProc(const char *name) {
-            #ifdef _OS_WIN
-                return (void*)wglGetProcAddress(name);
-            #elif _OS_LINUX
-                return (void*)glXGetProcAddress((GLubyte*)name);
-            #else // EGL
-                return (void*)eglGetProcAddress(name);
-            #endif
-        }
-    #endif
+    void* GetProc(const char *name) {
+        #ifdef _OS_WIN
+            return (void*)wglGetProcAddress(name);
+        #elif _OS_LINUX
+            return (void*)glXGetProcAddress((GLubyte*)name);
+        #elif __SDL2__
+            return (void*)SDL_GL_GetProcAddress(name);
+        #else // EGL
+            return (void*)eglGetProcAddress(name);
+        #endif
+    }
 
-    #define GetProcOGL(x) x=(decltype(x))GetProc(#x);
+    #define GetProcOGL(x) x=(decltype(x))GetProc(#x)
 
     // TODO: different systems, different headers, different extension suffixes... fuck this shit and make your own OGL header!
 
@@ -282,11 +337,12 @@
         PFNGLXSWAPINTERVALSGIPROC glXSwapIntervalSGI;
     #endif
 
-    #if defined(_OS_WIN) || defined(_OS_LINUX)
+    #if defined(_OS_WIN) || defined(_OS_LINUX) || (defined(__SDL2__) && !defined(_GAPI_GLES2))
         PFNGLGENERATEMIPMAPPROC             glGenerateMipmap;
         #ifdef _OS_WIN
             PFNGLTEXIMAGE3DPROC             glTexImage3D;
         #endif
+        PFNGLGETSTRINGIPROC                 glGetStringi;
     // Profiling
         #ifdef PROFILE
             PFNGLOBJECTLABELPROC                glObjectLabel;
@@ -323,16 +379,17 @@
         PFNGLVERTEXATTRIBPOINTERPROC        glVertexAttribPointer;
         PFNGLGETPROGRAMIVPROC               glGetProgramiv;
     // Render to texture
-        PFNGLGENFRAMEBUFFERSPROC            glGenFramebuffers;
-        PFNGLBINDFRAMEBUFFERPROC            glBindFramebuffer;
-        PFNGLGENRENDERBUFFERSPROC           glGenRenderbuffers;
-        PFNGLBINDRENDERBUFFERPROC           glBindRenderbuffer;
-        PFNGLFRAMEBUFFERTEXTURE2DPROC       glFramebufferTexture2D;
-        PFNGLFRAMEBUFFERRENDERBUFFERPROC    glFramebufferRenderbuffer;
-        PFNGLRENDERBUFFERSTORAGEPROC        glRenderbufferStorage;
-        PFNGLCHECKFRAMEBUFFERSTATUSPROC     glCheckFramebufferStatus;
-        PFNGLDELETEFRAMEBUFFERSPROC         glDeleteFramebuffers;
-        PFNGLDELETERENDERBUFFERSPROC        glDeleteRenderbuffers;
+        PFNGLGENFRAMEBUFFERSPROC                     glGenFramebuffers;
+        PFNGLBINDFRAMEBUFFERPROC                     glBindFramebuffer;
+        PFNGLGENRENDERBUFFERSPROC                    glGenRenderbuffers;
+        PFNGLBINDRENDERBUFFERPROC                    glBindRenderbuffer;
+        PFNGLFRAMEBUFFERTEXTURE2DPROC                glFramebufferTexture2D;
+        PFNGLFRAMEBUFFERRENDERBUFFERPROC             glFramebufferRenderbuffer;
+        PFNGLRENDERBUFFERSTORAGEPROC                 glRenderbufferStorage;
+        PFNGLCHECKFRAMEBUFFERSTATUSPROC              glCheckFramebufferStatus;
+        PFNGLDELETEFRAMEBUFFERSPROC                  glDeleteFramebuffers;
+        PFNGLDELETERENDERBUFFERSPROC                 glDeleteRenderbuffers;
+        PFNGLGETFRAMEBUFFERATTACHMENTPARAMETERIVPROC glGetFramebufferAttachmentParameteriv;
     // Mesh
         PFNGLGENBUFFERSARBPROC              glGenBuffers;
         PFNGLDELETEBUFFERSARBPROC           glDeleteBuffers;
@@ -341,15 +398,17 @@
         PFNGLBUFFERSUBDATAARBPROC           glBufferSubData;
     #endif
 
+// Vertex Arrays
     PFNGLGENVERTEXARRAYSPROC            glGenVertexArrays;
     PFNGLDELETEVERTEXARRAYSPROC         glDeleteVertexArrays;
     PFNGLBINDVERTEXARRAYPROC            glBindVertexArray;
+// Binary shaders
     PFNGLGETPROGRAMBINARYPROC           glGetProgramBinary;
     PFNGLPROGRAMBINARYPROC              glProgramBinary;
-#endif
 
-#if defined(_GAPI_GLES) && !defined(_OS_RPI) && !defined(_OS_CLOVER) && !defined(_OS_PSC) && !defined(_OS_IOS) && !defined(_OS_ANDROID) && !defined(__SDL2__)
-    PFNGLDISCARDFRAMEBUFFEREXTPROC      glDiscardFramebufferEXT;
+    #if defined(_GAPI_GLES)
+        PFNGLDISCARDFRAMEBUFFEREXTPROC      glDiscardFramebufferEXT;
+    #endif 
 #endif
 
 #ifdef PROFILE
@@ -435,6 +494,8 @@ namespace GAPI {
     char GLSL_HEADER_VERT[512];
     char GLSL_HEADER_FRAG[512];
 
+    bool GL_VER_3 = false;
+
 // Shader
     #ifndef FFP
         const char SHADER_COMPOSE[] =
@@ -472,7 +533,6 @@ namespace GAPI {
         bool vec; // true - vec4, false - mat4
         int  reg;
     } bindings[uMAX] = {
-        { true,  94 }, // uFlags
         { true,   0 }, // uParam
         { true,   1 }, // uTexParam
         { false,  2 }, // uViewProj
@@ -494,6 +554,7 @@ namespace GAPI {
         void init(Core::Pass pass, int type, int *def, int defCount) {}
         void deinit() {}
         void bind() {}
+        void validate() {}
         void setParam(UniformType uType, const vec4  &value, int count = 1) {}
         void setParam(UniformType uType, const mat4  &value, int count = 1) {}
     #else
@@ -521,13 +582,13 @@ namespace GAPI {
             #ifdef _DEBUG_SHADERS
                 Stream *stream = NULL;
                 switch (pass) {
-                    case Core::passCompose : stream = new Stream("../../src/shaders/compose.glsl"); break;
-                    case Core::passShadow  : stream = new Stream("../../src/shaders/shadow.glsl");  break;
-                    case Core::passAmbient : stream = new Stream("../../src/shaders/ambient.glsl"); break;
-                    case Core::passSky     : stream = new Stream("../../src/shaders/sky.glsl");     break;
-                    case Core::passWater   : stream = new Stream("../../src/shaders/water.glsl");   break;
-                    case Core::passFilter  : stream = new Stream("../../src/shaders/filter.glsl");  break;
-                    case Core::passGUI     : stream = new Stream("../../src/shaders/gui.glsl");     break;
+                    case Core::passCompose : stream = new Stream(_DEBUG_SHADERS "compose.glsl"); break;
+                    case Core::passShadow  : stream = new Stream(_DEBUG_SHADERS "shadow.glsl");  break;
+                    case Core::passAmbient : stream = new Stream(_DEBUG_SHADERS "ambient.glsl"); break;
+                    case Core::passSky     : stream = new Stream(_DEBUG_SHADERS "sky.glsl");     break;
+                    case Core::passWater   : stream = new Stream(_DEBUG_SHADERS "water.glsl");   break;
+                    case Core::passFilter  : stream = new Stream(_DEBUG_SHADERS "filter.glsl");  break;
+                    case Core::passGUI     : stream = new Stream(_DEBUG_SHADERS "gui.glsl");     break;
                     default                : ASSERT(false);  return;
                 }
                 
@@ -559,7 +620,18 @@ namespace GAPI {
                 sprintf(defines + strlen(defines), "#define %s\n", DefineName[def[i]]);
             }
 
-            #if defined(_OS_RPI) || defined(_OS_CLOVER) || (defined (__SDL2__) && defined (_GAPI_GLES))
+            sprintf(defines + strlen(defines), "#define SHADOW_SIZE %d.0\n", SHADOW_TEX_SIZE);
+
+            #ifdef MERGE_MODELS
+                strcat(defines, "#define MESH_SKINNING\n");
+            #endif
+
+            // etnaviv driver has no sin/cos/abs implementation
+            #if !defined(_OS_GCW0) 
+                strcat(defines, "#define VERT_CAUSTICS\n");
+            #endif
+
+            #if defined(_OS_RPI) || defined(_OS_CLOVER) || defined(_OS_GCW0) || (defined (__SDL2__) && defined(_GAPI_GLES))
                 strcat(defines, "#define OPT_VLIGHTPROJ\n");
                 strcat(defines, "#define OPT_VLIGHTVEC\n");
                 strcat(defines, "#define OPT_SHADOW_ONETAP\n");
@@ -732,19 +804,19 @@ namespace GAPI {
 
 
 // Texture
-	static const struct FormatDesc {
-		GLuint ifmt, fmt;
-		GLenum type;
-	} formats[FMT_MAX] = {
-		{ GL_LUMINANCE,       GL_LUMINANCE,       GL_UNSIGNED_BYTE          }, // LUMINANCE
-		{ GL_RGBA,            GL_RGBA,            GL_UNSIGNED_BYTE          }, // RGBA
-		{ GL_RGB,             GL_RGB,             GL_UNSIGNED_SHORT_5_6_5   }, // RGB16
-		{ GL_RGBA,            GL_RGBA,            GL_UNSIGNED_SHORT_5_5_5_1 }, // RGBA16
-		{ GL_RG32F,           GL_RG,              GL_FLOAT                  }, // RG_FLOAT
-		{ GL_RG16F,           GL_RG,              GL_HALF_FLOAT             }, // RG_HALF
-		{ GL_DEPTH_COMPONENT, GL_DEPTH_COMPONENT, GL_UNSIGNED_SHORT         }, // DEPTH
-		{ GL_DEPTH_COMPONENT, GL_DEPTH_COMPONENT, GL_UNSIGNED_SHORT         }, // SHADOW
-	};
+    static const struct FormatDesc {
+        GLuint ifmt, fmt;
+        GLenum type;
+    } formats[FMT_MAX] = {
+        { GL_LUMINANCE,       GL_LUMINANCE,       GL_UNSIGNED_BYTE          }, // LUMINANCE
+        { GL_RGBA,            GL_RGBA,            GL_UNSIGNED_BYTE          }, // RGBA
+        { GL_RGB,             GL_RGB,             GL_UNSIGNED_SHORT_5_6_5   }, // RGB16
+        { GL_RGBA,            GL_RGBA,            GL_UNSIGNED_SHORT_5_5_5_1 }, // RGBA16
+        { GL_RG32F,           GL_RG,              GL_FLOAT                  }, // RG_FLOAT
+        { GL_RG16F,           GL_RG,              GL_HALF_FLOAT             }, // RG_HALF
+        { GL_DEPTH_COMPONENT, GL_DEPTH_COMPONENT, GL_UNSIGNED_SHORT         }, // DEPTH
+        { GL_DEPTH_COMPONENT, GL_DEPTH_COMPONENT, GL_UNSIGNED_SHORT         }, // SHADOW
+    };
 
     struct Texture {
         uint32     ID;
@@ -818,6 +890,11 @@ namespace GAPI {
                 desc.fmt  = GL_RGBA;
             }
 
+            if (fmt == FMT_LUMINANCE && Core::support.texRG) {
+                desc.ifmt = GL_R8;
+                desc.fmt  = GL_RED;
+            }
+
             #ifdef _OS_WEB // fucking firefox!
                 if (WEBGL_VERSION == 1) {
                     if (fmt == FMT_RG_FLOAT) {
@@ -853,13 +930,14 @@ namespace GAPI {
 
         void generateMipMap() {
             bind(0);
-
-            glGenerateMipmap(target);
+            if (glGenerateMipmap) {
+                glGenerateMipmap(target);
+            }
             if ((opt & (OPT_VOLUME | OPT_CUBEMAP | OPT_NEAREST)) == 0 && (Core::support.maxAniso > 0)) {
                 glTexParameteri(target, GL_TEXTURE_MAX_ANISOTROPY_EXT, min(int(Core::support.maxAniso), 8));
-            #if !defined(_OS_RPI) && !defined(_OS_CLOVER) && !defined(_GAPI_GLES2) // TODO
-                glTexParameteri(target, GL_TEXTURE_MAX_LEVEL, 3);
-            #endif
+                if (Core::support.texMaxLevel) {
+                    glTexParameteri(target, GL_TEXTURE_MAX_LEVEL, 3);
+                }
             }
         }
 
@@ -876,7 +954,13 @@ namespace GAPI {
 
             if (Core::active.textures[sampler] != this) {
                 Core::active.textures[sampler] = this;
+            #ifdef FFP
+                if (sampler != sDiffuse) {
+                    return;
+                }
+            #else
                 glActiveTexture(GL_TEXTURE0 + sampler);
+            #endif
                 glBindTexture(target, ID);
             }
         }
@@ -884,7 +968,13 @@ namespace GAPI {
         void unbind(int sampler) {
             if (Core::active.textures[sampler]) {
                 Core::active.textures[sampler] = NULL;
+            #ifdef FFP
+                if (sampler != sDiffuse) {
+                    return;
+                }
+            #else
                 glActiveTexture(GL_TEXTURE0 + sampler);
+            #endif
                 glBindTexture(target, 0);
             }
         }
@@ -927,21 +1017,27 @@ namespace GAPI {
             if (Core::support.VAO)
                 glBindVertexArray(Core::active.VAO = 0);
 
+            bool useVBO = Core::support.VBO;
+
             #ifdef DYNGEOM_NO_VBO
                 if (!vertices && !indices) {
-                    iBuffer = new Index[iCount];
-                    vBuffer = new GAPI::Vertex[vCount];
-                    return;
+                    useVBO = false;
                 }
-            #endif 
+            #endif
 
             ASSERT(sizeof(GAPI::Vertex) == sizeof(::Vertex));
 
-            glGenBuffers(2, ID);
-            glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ID[0]);
-            glBindBuffer(GL_ARRAY_BUFFER,         ID[1]);
-            glBufferData(GL_ELEMENT_ARRAY_BUFFER, iCount * sizeof(Index),  indices,  dynamic ? GL_DYNAMIC_DRAW : GL_STATIC_DRAW);
-            glBufferData(GL_ARRAY_BUFFER,         vCount * sizeof(Vertex), vertices, dynamic ? GL_DYNAMIC_DRAW : GL_STATIC_DRAW);
+            if (useVBO) {
+                glGenBuffers(2, ID);
+                glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ID[0]);
+                glBindBuffer(GL_ARRAY_BUFFER,         ID[1]);
+                glBufferData(GL_ELEMENT_ARRAY_BUFFER, iCount * sizeof(Index),  indices,  dynamic ? GL_DYNAMIC_DRAW : GL_STATIC_DRAW);
+                glBufferData(GL_ARRAY_BUFFER,         vCount * sizeof(Vertex), vertices, dynamic ? GL_DYNAMIC_DRAW : GL_STATIC_DRAW);
+            } else {
+                iBuffer = new Index[iCount];
+                vBuffer = new GAPI::Vertex[vCount];
+                update(indices, iCount, vertices, vCount);
+            }
             
             if (Core::support.VAO && aCount) {
                 VAO = new GLuint[aCount];
@@ -1009,9 +1105,9 @@ namespace GAPI {
 
         void bind(const MeshRange &range) const {
             if (range.aIndex == -1) {
-                if (Core::active.iBuffer != ID[0])
+                if (Core::support.VBO && Core::active.iBuffer != ID[0])
                     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, Core::active.iBuffer = ID[0]);
-                if (Core::active.vBuffer != ID[1])
+                if (Core::support.VBO && Core::active.vBuffer != ID[1])
                     glBindBuffer(GL_ARRAY_BUFFER, Core::active.vBuffer = ID[1]);
                 setupFVF(vBuffer + range.vStart);
             } else {
@@ -1051,17 +1147,42 @@ namespace GAPI {
     };
     Array<RenderTargetCacheItem> rtCache[2];
 
-    bool extSupport(const char *str, const char *ext) {
-        if (!str) return false;
-        return strstr(str, ext) != NULL;
+
+    bool extSupport(const char *str) {
+        #if !defined(_GAPI_GLES2) && !_OS_MAC
+        if (glGetStringi != NULL) {
+            GLint count = 0;
+            glGetIntegerv(GL_NUM_EXTENSIONS, &count); 
+            for (int i = 0; i < count; i++) {
+                const char *ext = (const char*)glGetStringi(GL_EXTENSIONS, i);
+                if (strstr(ext, str) != NULL) {
+                    return true;
+                }
+            }
+        } else
+        #endif
+        {
+            const char *ext =  (const char*)glGetString(GL_EXTENSIONS);
+            if (!ext) {
+                return false;
+            }
+            return strstr(ext, str) != NULL;
+        }
+
+        return false;
     }
 
     void init() {
+
         #ifdef _OS_ANDROID
             //void *libGL = dlopen("libGLESv2.so", RTLD_LAZY);
         #endif
 
-        #if defined(_OS_WIN) || defined(_OS_LINUX)
+        #if (defined(__SDL2__) && defined(_GAPI_GLES2))
+                GetProcOGL(glDiscardFramebufferEXT);
+        #endif
+
+        #if defined(_OS_WIN) || defined(_OS_LINUX) || defined(_OS_GCW0) || (defined(__SDL2__) && !defined(_GAPI_GLES)) 
             #ifdef _OS_WIN
                 GetProcOGL(glActiveTexture);
             #endif
@@ -1072,11 +1193,13 @@ namespace GAPI {
                 GetProcOGL(glXSwapIntervalSGI);
             #endif
 
-            #if defined(_OS_WIN) || defined(_OS_LINUX)
+            #if defined(_OS_WIN) || defined(_OS_LINUX) || (defined(__SDL2__) && (defined(_GAPI_GLES2) || defined(_SDL2_OPENGL)))
                 GetProcOGL(glGenerateMipmap);
                 #ifdef _OS_WIN
                     GetProcOGL(glTexImage3D);
                 #endif
+
+                GetProcOGL(glGetStringi);
 
                 #ifdef PROFILE
                     GetProcOGL(glObjectLabel);
@@ -1123,6 +1246,7 @@ namespace GAPI {
                 GetProcOGL(glCheckFramebufferStatus);
                 GetProcOGL(glDeleteFramebuffers);
                 GetProcOGL(glDeleteRenderbuffers);
+                GetProcOGL(glGetFramebufferAttachmentParameteriv);
 
                 GetProcOGL(glGenBuffers);
                 GetProcOGL(glDeleteBuffers);
@@ -1134,10 +1258,11 @@ namespace GAPI {
             GetProcOGL(glGenVertexArrays);
             GetProcOGL(glDeleteVertexArrays);
             GetProcOGL(glBindVertexArray);
+
             GetProcOGL(glGetProgramBinary);
             GetProcOGL(glProgramBinary);
 
-            #ifdef _GAPI_GLES
+            #if defined(_GAPI_GLES)
                 GetProcOGL(glDiscardFramebufferEXT);
             #endif
         #endif
@@ -1145,22 +1270,6 @@ namespace GAPI {
         LOG("Vendor   : %s\n", (char*)glGetString(GL_VENDOR));
         LOG("Renderer : %s\n", (char*)glGetString(GL_RENDERER));
         LOG("Version  : %s\n", (char*)glGetString(GL_VERSION));
-
-        char *ext = (char*)glGetString(GL_EXTENSIONS);
-/*
-        if (ext != NULL) {
-            char buf[255];
-            int len = strlen(ext);
-            int start = 0;
-            for (int i = 0; i < len; i++)
-                if (ext[i] == ' ' || (i == len - 1)) {
-                    memcpy(buf, &ext[start], i - start);
-                    buf[i - start] = 0;
-                    LOG("%s\n", buf);
-                    start = i + 1;
-                }
-        }
-*/
 
     #ifndef FFP
         bool GLES3 = false;
@@ -1172,7 +1281,7 @@ namespace GAPI {
                 #if defined(__SDL2__)
                     SDL_GL_GetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, &GLES_VERSION);
                 #else
-                    #if defined(_OS_RPI) || defined(_OS_CLOVER)
+                    #if defined(_OS_RPI) || defined(_OS_CLOVER) || defined(_OS_GCW0)
                         GLES_VERSION = 2;
                     #else
                         glGetIntegerv(GL_MAJOR_VERSION, &GLES_VERSION);
@@ -1182,17 +1291,20 @@ namespace GAPI {
             #endif
         #endif
 
-        bool _GL_EXT_shadow_samplers      = extSupport(ext, "GL_EXT_shadow_samplers");
-        bool _GL_ARB_shadow               = extSupport(ext, "GL_ARB_shadow");
-        bool _GL_OES_standard_derivatives = extSupport(ext, "GL_OES_standard_derivatives");
+        bool _GL_EXT_shadow_samplers      = extSupport("GL_EXT_shadow_samplers");
+        bool _GL_ARB_shadow               = extSupport("GL_ARB_shadow");
+        bool _GL_OES_standard_derivatives = extSupport("GL_OES_standard_derivatives");
 
-        support.shaderBinary   = extSupport(ext, "_program_binary");
-        support.VAO            = GLES3 || extSupport(ext, "_vertex_array_object");
-        support.depthTexture   = GLES3 || extSupport(ext, "_depth_texture");
+        support.shaderBinary   = extSupport("_program_binary");
+        support.VAO            = GLES3 || extSupport("_vertex_array_object");
+        support.VBO            = glGenBuffers != NULL;
+        support.depthTexture   = GLES3 || extSupport("_depth_texture");
         support.shadowSampler  = _GL_EXT_shadow_samplers || _GL_ARB_shadow;
-        support.discardFrame   = extSupport(ext, "_discard_framebuffer");
-        support.texNPOT        = GLES3 || extSupport(ext, "_texture_npot") || extSupport(ext, "_texture_non_power_of_two");
-        support.texRG          = GLES3 || extSupport(ext, "_texture_rg ");   // hope that isn't last extension in string ;)
+        support.discardFrame   = extSupport("_discard_framebuffer");
+        support.texNPOT        = GLES3 || extSupport("_texture_npot") || extSupport("_texture_non_power_of_two");
+        support.texRG          = GLES3 || extSupport("_texture_rg");
+        support.texMaxLevel    = GLES3 || extSupport("_texture_max_level");
+
         #ifdef _GAPI_GLES2 // TODO
             support.shaderBinary = false;
             support.VAO = false;
@@ -1206,16 +1318,15 @@ namespace GAPI {
             support.derivatives = true; 
             support.tex3D       = glTexImage3D != NULL;
         #endif
-        support.texBorder      = extSupport(ext, "_texture_border_clamp");
-        support.maxAniso       = extSupport(ext, "_texture_filter_anisotropic");
-        support.colorFloat     = extSupport(ext, "_color_buffer_float");
-        support.colorHalf      = extSupport(ext, "_color_buffer_half_float") || extSupport(ext, "GL_ARB_half_float_pixel");
-        support.texFloatLinear = support.colorFloat || extSupport(ext, "GL_ARB_texture_float") || extSupport(ext, "_texture_float_linear");
-        support.texFloat       = support.texFloatLinear || extSupport(ext, "_texture_float");
-        support.texHalfLinear  = support.colorHalf || extSupport(ext, "GL_ARB_texture_float") || extSupport(ext, "_texture_half_float_linear") || extSupport(ext, "_color_buffer_half_float");
+        support.texBorder      = extSupport("_texture_border_clamp");
+        support.maxAniso       = extSupport("_texture_filter_anisotropic");
+        support.colorFloat     = extSupport("_color_buffer_float");
+        support.colorHalf      = extSupport("_color_buffer_half_float") || extSupport("GL_ARB_half_float_pixel");
+        support.texFloatLinear = support.colorFloat || extSupport("GL_ARB_texture_float") || extSupport("_texture_float_linear");
+        support.texFloat       = support.texFloatLinear || extSupport("_texture_float");
+        support.texHalfLinear  = support.colorHalf || extSupport("GL_ARB_texture_float") || extSupport("_texture_half_float_linear") || extSupport("_color_buffer_half_float");
  
-        support.texHalf        = support.texHalfLinear || extSupport(ext, "_texture_half_float");
-        support.clipDist       = false; // TODO
+        support.texHalf        = support.texHalfLinear || extSupport("_texture_half_float");
 
         #ifdef SDL2_GLES
             support.shaderBinary  = false; // TODO
@@ -1224,8 +1335,8 @@ namespace GAPI {
         #endif
 
         #ifdef PROFILE
-            support.profMarker = extSupport(ext, "_KHR_debug");
-            support.profTiming = extSupport(ext, "_timer_query");
+            support.profMarker = extSupport("_KHR_debug");
+            support.profTiming = extSupport("_timer_query");
         #endif
 
         if (support.maxAniso)
@@ -1240,8 +1351,6 @@ namespace GAPI {
         glEnable(GL_SCISSOR_TEST);
         glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
 
-        glGetIntegerv(GL_FRAMEBUFFER_BINDING, (GLint*)&defaultFBO);
-        glGenFramebuffers(1, &FBO);
         glDepthFunc(GL_LEQUAL);
 
     #ifdef FFP
@@ -1258,17 +1367,22 @@ namespace GAPI {
         glScalef(1.0f / 32767.0f, 1.0f / 32767.0f, 1.0f / 32767.0f);
 
         glClearColor(0, 0, 0, 0);
-    #endif
+    #else 
+        glGetIntegerv(GL_FRAMEBUFFER_BINDING, (GLint*)&defaultFBO);
+        glGenFramebuffers(1, &FBO);
 
         char extHeader[256];
         GLSL_HEADER_VERT[0] = GLSL_HEADER_FRAG[0] = extHeader[0] = 0;
         if (_GL_OES_standard_derivatives) {
-            strcat(extHeader, "#extension GL_OES_standard_derivatives : enable\n");
+            if (!GLES3) {
+                strcat(extHeader, "#extension GL_OES_standard_derivatives : enable\n");
+            }
         }
 
         if (_GL_EXT_shadow_samplers && !_GL_ARB_shadow) {
-            strcat(extHeader, "#extension GL_EXT_shadow_samplers : enable\n");
-            strcat(extHeader, "#define USE_GL_EXT_shadow_samplers\n");
+            if (!GLES3) {
+                strcat(extHeader, "#extension GL_EXT_shadow_samplers : enable\n");
+            }
         }
         
     #ifdef _GAPI_GLES
@@ -1292,6 +1406,7 @@ namespace GAPI {
                                      "#define texture2D   texture\n"
                                      "#define texture3D   texture\n"
                                      "#define textureCube texture\n"
+                                     "#define FETCH_SHADOW2D(a,b) texture(a,b)\n"
                                      "out vec4 fragColor;\n");
         } else {
             // vertex
@@ -1305,6 +1420,7 @@ namespace GAPI {
             strcat(GLSL_HEADER_FRAG, "precision lowp  int;\n"
                                      "precision highp float;\n"
                                      "#define FRAGMENT\n"
+                                     "#define FETCH_SHADOW2D(a,b) shadow2DEXT(a,b)\n"
                                      "#define fragColor gl_FragColor\n");
         }
 
@@ -1312,20 +1428,43 @@ namespace GAPI {
             strcat(GLSL_HEADER_FRAG, "#define sampler2DShadow lowp sampler2DShadow\n");
         }
     #else
-        // vertex
-        strcat(GLSL_HEADER_VERT, "#version 110\n"
-                                 "#define VERTEX\n");
-        // fragment
-        strcat(GLSL_HEADER_FRAG, "#version 110\n");
-        strcat(GLSL_HEADER_FRAG, extHeader);
-        strcat(GLSL_HEADER_FRAG, "#define FRAGMENT\n"
-                                 "#define fragColor gl_FragColor\n");
+        if (GL_VER_3) {
+            strcat(GLSL_HEADER_VERT, "#version 150\n"
+                                     "#define VERTEX\n"
+                                     "#define varying   out\n"
+                                     "#define attribute in\n"
+                                     "#define texture2D texture\n");
+            // fragment
+            strcat(GLSL_HEADER_FRAG, "#version 150\n");
+            strcat(GLSL_HEADER_FRAG, extHeader);
+            strcat(GLSL_HEADER_FRAG, "#define FRAGMENT\n"
+                                     "#define varying     in\n"
+                                     "#define texture2D   texture\n"
+                                     "#define texture3D   texture\n"
+                                     "#define textureCube texture\n"
+                                     "#define FETCH_SHADOW2D(a,b) texture(a,b)\n"
+                                     "out vec4 fragColor;\n");
+        } else {
+            // vertex
+            strcat(GLSL_HEADER_VERT, "#version 110\n"
+                                     "#define VERTEX\n");
+            // fragment
+            strcat(GLSL_HEADER_FRAG, "#version 110\n");
+            strcat(GLSL_HEADER_FRAG, extHeader);
+            strcat(GLSL_HEADER_FRAG, "#define FRAGMENT\n"
+                                     "#define FETCH_SHADOW2D(a,b) shadow2D(a,b).x\n"
+                                     "#define fragColor gl_FragColor\n");
+        }
     #endif
         ASSERT(strlen(GLSL_HEADER_VERT) < COUNT(GLSL_HEADER_VERT));
         ASSERT(strlen(GLSL_HEADER_FRAG) < COUNT(GLSL_HEADER_FRAG));
+    #endif // FFP
     }
 
     void deinit() {
+        #ifdef FFP
+            return;
+        #endif
         glBindFramebuffer(GL_FRAMEBUFFER, 0);
         glDeleteFramebuffers(1, &FBO);
 
@@ -1338,15 +1477,19 @@ namespace GAPI {
         }
     }
 
+    inline mat4::ProjRange getProjRange() {
+        return mat4::PROJ_NEG_POS;
+    }
+
     mat4 ortho(float l, float r, float b, float t, float znear, float zfar) {
         mat4 m;
-        m.ortho(mat4::PROJ_NEG_POS, l, r, b, t, znear, zfar);
+        m.ortho(getProjRange(), l, r, b, t, znear, zfar);
         return m;
     }
 
     mat4 perspective(float fov, float aspect, float znear, float zfar, float eye) {
         mat4 m;
-        m.perspective(mat4::PROJ_NEG_POS, fov, aspect, znear, zfar, eye);
+        m.perspective(getProjRange(), fov, aspect, znear, zfar, eye);
         return m;
     }
 
@@ -1359,10 +1502,16 @@ namespace GAPI {
     void resetState() {
         if (Core::support.VAO)
             glBindVertexArray(0);
-        glActiveTexture(GL_TEXTURE0);
-        glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
-        glBindBuffer(GL_ARRAY_BUFFER, 0);
-        glUseProgram(0);
+
+        #ifndef FFP
+            glActiveTexture(GL_TEXTURE0);
+            glUseProgram(0);
+        #endif
+
+        if (Core::support.VBO) {
+            glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
+            glBindBuffer(GL_ARRAY_BUFFER, 0);
+        }
     }
 
     int cacheRenderTarget(bool depth, int width, int height) {
@@ -1396,8 +1545,9 @@ namespace GAPI {
             glBindFramebuffer(GL_FRAMEBUFFER, defaultFBO);
         } else {
             GLenum texTarget = GL_TEXTURE_2D;
-            if (target->opt & OPT_CUBEMAP) 
+            if (target->opt & OPT_CUBEMAP) {
                 texTarget = GL_TEXTURE_CUBE_MAP_POSITIVE_X + face;
+            }
 
             bool depth = target->fmt == FMT_DEPTH || target->fmt == FMT_SHADOW;
 
@@ -1408,7 +1558,7 @@ namespace GAPI {
             glFramebufferRenderbuffer (GL_FRAMEBUFFER, depth ? GL_COLOR_ATTACHMENT0 : GL_DEPTH_ATTACHMENT,  GL_RENDERBUFFER, rtCache[!depth].items[rtIndex].ID);
             GLuint status = glCheckFramebufferStatus(GL_FRAMEBUFFER);
             if (status != GL_FRAMEBUFFER_COMPLETE) {
-                LOG("status: %d\n", (int)status);
+                LOG("status: 0x%04X\n", (int)status);
             }
         }
     }
@@ -1421,12 +1571,15 @@ namespace GAPI {
             if (color) discard[count++] = Core::active.target ? GL_COLOR_ATTACHMENT0 : GL_COLOR_EXT;
             if (depth) discard[count++] = Core::active.target ? GL_DEPTH_ATTACHMENT  : GL_DEPTH_EXT;
             if (count) {
-                #ifdef _OS_ANDROID
+                #if defined(_OS_ANDROID) || (defined(__SDL2__) && !defined(_GAPI_GLES2))
+                   /* glInvalidateBuffer() is the GLES3 version of glDiscardFramebufferEXT(), also
+                      available on Android. Not available in any GLES2 implementation, this is GLES3 stuff.*/
                     glInvalidateFramebuffer(GL_FRAMEBUFFER, count, discard);
-                #else
-                    #if !defined(__SDL2__) && !defined(_OS_PSC)
-                        glDiscardFramebufferEXT(GL_FRAMEBUFFER, count, discard);
-                    #endif
+                #elif !defined(_OS_WEB) || (defined(__SDL2__) && defined(_GAPI_GLES2))
+                    /* glDiscardFramebufferEXT() is available even in GLES2 MESA implementations,
+                       but we have to get the extension function pointer address to use it.
+                       Not available in GLES3, which is SDL2 default GLES version. */
+                    glDiscardFramebufferEXT(GL_FRAMEBUFFER, count, discard);
                 #endif
             }
         }
@@ -1446,6 +1599,8 @@ namespace GAPI {
             if (wglSwapIntervalEXT) wglSwapIntervalEXT(enable ? 1 : 0);
         #elif _OS_LINUX
             if (glXSwapIntervalSGI) glXSwapIntervalSGI(enable ? 1 : 0);
+        #elif defined(__SDL2__)
+            SDL_GL_SetSwapInterval(enable ? 1 : 0);
         #elif defined(_OS_RPI) || defined(_OS_CLOVER) || defined(_OS_SWITCH)
             eglSwapInterval(display, enable ? 1 : 0);
         #endif
@@ -1470,9 +1625,12 @@ namespace GAPI {
         glClearColor(color.x, color.y, color.z, color.w);
     }
 
-    void setViewport(const Viewport &vp) {
-        glViewport(vp.x, vp.y, vp.width, vp.height);
-        glScissor(vp.x, vp.y, vp.width, vp.height);
+    void setViewport(const short4 &v) {
+        glViewport(v.x, v.y, v.z, v.w);
+    }
+
+    void setScissor(const short4 &s) {
+        glScissor(s.x, s.y, s.z, s.w);
     }
 
     void setDepthTest(bool enable) {
@@ -1577,6 +1735,10 @@ namespace GAPI {
     #endif
     }
 
+    void setFog(const vec4 &params) {
+        // FFP TODO
+    }
+
     void DIP(Mesh *mesh, const MeshRange &range) {
     #ifdef FFP
         mat4 m = mView * mModel;
@@ -1587,7 +1749,7 @@ namespace GAPI {
             Core::active.shader->validate();
         }
 
-        glDrawElements(GL_TRIANGLES, range.iCount, GL_UNSIGNED_SHORT, mesh->iBuffer + range.iStart);
+        glDrawElements(GL_TRIANGLES, range.iCount, sizeof(Index) == 2 ? GL_UNSIGNED_SHORT : GL_UNSIGNED_INT, mesh->iBuffer + range.iStart);
     }
 
     vec4 copyPixel(int x, int y) {

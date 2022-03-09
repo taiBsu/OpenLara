@@ -8,7 +8,7 @@
 
 #define INV_MAX_ITEMS  32
 #define INV_MAX_RADIUS 688.0f
-#ifdef _OS_PSP
+#if defined(_OS_PSP) || defined(_OS_3DS) || defined(_OS_GCW0)
     #define INV_BG_SIZE    256
 #else
     #define INV_BG_SIZE    512
@@ -35,16 +35,16 @@ struct OptionItem {
         TYPE_KEY,
     } type;
     StringID title;
-    intptr_t offset;
+    int32    offset;
     uint32   color;
     uint32   icon;
     uint8    maxValue;
     bool     bar;
 
-    OptionItem(Type type = TYPE_EMPTY, int title = STR_EMPTY, intptr_t offset = 0, uint32 color = 0xFFFFFFFF, int icon = 0, uint8 maxValue = 0, bool bar = false) : type(type), title(StringID(title)), offset(offset), color(color), icon(icon), maxValue(maxValue), bar(bar) {}
+    OptionItem(Type type = TYPE_EMPTY, int title = STR_EMPTY, int32 offset = 0, uint32 color = 0xFFFFFFFF, int icon = 0, uint8 maxValue = 0, bool bar = false) : type(type), title(StringID(title)), offset(offset), color(color), icon(icon), maxValue(maxValue), bar(bar) {}
 
     void setValue(uint8 value, Core::Settings *settings) const {
-        *(uint8*)(intptr_t(settings) + offset) = value;
+        *((uint8*)settings + offset) = value;
     }
 
     bool checkValue(uint8 value) const {
@@ -82,8 +82,10 @@ struct OptionItem {
             int maxWidth = UI::getTextSize(STR[color + value]).x;
             maxWidth = maxWidth / 2 + 8;
             x += w * 0.5f;
-            if (checkValue(value - 1)) UI::specOut(vec2(x - maxWidth - 16.0f, y), 108);
-            if (checkValue(value + 1)) UI::specOut(vec2(x + maxWidth, y), 109);
+            if (maxValue != 0xFF) {
+                if (checkValue(value - 1)) UI::specOut(vec2(x - maxWidth - 16.0f, y), 108);
+                if (checkValue(value + 1)) UI::specOut(vec2(x + maxWidth, y), 109);
+            }
         }
         return y + LINE_HEIGHT;
     }
@@ -102,7 +104,7 @@ struct OptionItem {
         if (active)
             UI::renderBar(CTEX_OPTION, vec2(x, y - LINE_HEIGHT + 6), vec2(w, LINE_HEIGHT - 6), 1.0f, 0xFFD8377C, 0);
 
-        const uint8 &value = *(uint8*)(intptr_t(settings) + offset);
+        const uint8 &value = *((uint8*)settings + offset);
 
         switch (type) {
             case TYPE_TITLE   : 
@@ -123,22 +125,31 @@ struct OptionItem {
     }
 };
 
-#define SETTINGS(x) OFFSETOF(Core::Settings, x)
+#define SETTINGS(x) int32(OFFSETOF(Core::Settings, x))
+
+#ifdef INV_SINGLE_PLAYER
+    #define INV_CTRL_START_OPTION 1
+#else
+    #define INV_CTRL_START_OPTION 2
+#endif
 
 static const OptionItem optDetail[] = {
     OptionItem( OptionItem::TYPE_TITLE,  STR_SELECT_DETAIL ),
     OptionItem( ),
+#ifdef INV_QUALITY
     OptionItem( OptionItem::TYPE_PARAM,  STR_OPT_DETAIL_FILTER,   SETTINGS( detail.filter    ), STR_QUALITY_LOW, 0, 2 ),
     OptionItem( OptionItem::TYPE_PARAM,  STR_OPT_DETAIL_LIGHTING, SETTINGS( detail.lighting  ), STR_QUALITY_LOW, 0, 2 ),
     OptionItem( OptionItem::TYPE_PARAM,  STR_OPT_DETAIL_SHADOWS,  SETTINGS( detail.shadows   ), STR_QUALITY_LOW, 0, 2 ),
     OptionItem( OptionItem::TYPE_PARAM,  STR_OPT_DETAIL_WATER,    SETTINGS( detail.water     ), STR_QUALITY_LOW, 0, 2 ),
+#endif
     OptionItem( OptionItem::TYPE_PARAM,  STR_OPT_SIMPLE_ITEMS,    SETTINGS( detail.simple    ), STR_OFF, 0, 1 ),
-#if defined(_OS_WIN) || defined(_OS_LINUX) || defined(_OS_PSP) || defined(_OS_RPI) || defined(_OS_PSV)
+#ifdef INV_QUALITY
+    OptionItem( OptionItem::TYPE_PARAM,  STR_OPT_RESOLUTION,      SETTINGS( detail.scale     ), STR_SCALE_100, 0, 3 ),
     OptionItem( OptionItem::TYPE_PARAM,  STR_OPT_DETAIL_VSYNC,    SETTINGS( detail.vsync     ), STR_OFF, 0, 1 ),
 #endif
-#if !defined(_OS_PSP) && !defined(_OS_PSV) && !defined(_OS_3DS)
+#ifdef INV_STEREO
     OptionItem( OptionItem::TYPE_PARAM,  STR_OPT_DETAIL_STEREO,   SETTINGS( detail.stereo    ), STR_NO_STEREO, 0, 
-    #if /*defined(_OS_WIN) ||*/ defined(_OS_ANDROID)
+    #if defined(_OS_WIN) || defined(_OS_ANDROID)
         4 /* with VR option */
     #else
         3 /* without VR support */
@@ -156,24 +167,10 @@ static const OptionItem optSound[] = {
     OptionItem( OptionItem::TYPE_PARAM,  STR_EMPTY,         SETTINGS( audio.sound     ), 0xFFFF8000, 102, SND_MAX_VOLUME, true ),
     OptionItem( OptionItem::TYPE_PARAM,  STR_REVERBERATION, SETTINGS( audio.reverb    ), STR_OFF, 0, 1 ),
     OptionItem( OptionItem::TYPE_PARAM,  STR_OPT_SUBTITLES, SETTINGS( audio.subtitles ), STR_OFF, 0, 1 ),
-    OptionItem( OptionItem::TYPE_PARAM,  STR_OPT_LANGUAGE,  SETTINGS( audio.language  ), STR_LANG_EN, 0, 10 ),
+#ifndef FFP
+    OptionItem( OptionItem::TYPE_PARAM,  STR_OPT_LANGUAGE,  SETTINGS( audio.language  ), STR_LANG_EN, 0, STR_LANG_SV - STR_LANG_EN ),
+#endif
 };
-
-#if defined(_OS_CLOVER) || defined(_OS_PSC)
-    #define INV_GAMEPAD_ONLY
-#endif
-
-#if defined(_OS_PSP) || defined(_OS_PSV) || defined(_OS_3DS)
-    #define INV_SINGLE_PLAYER
-    #define INV_GAMEPAD_ONLY
-    #define INV_CTRL_START_OPTION 1
-#else
-    #define INV_CTRL_START_OPTION 2
-#endif
-
-#if defined(_OS_WIN) || defined(_OS_LINUX) || defined(_OS_RPI)
-    #define INV_VIBRATION
-#endif
 
 static const OptionItem optControls[] = {
     OptionItem( OptionItem::TYPE_TITLE,  STR_SET_CONTROLS ),
@@ -188,7 +185,7 @@ static const OptionItem optControls[] = {
     OptionItem( OptionItem::TYPE_PARAM,  STR_OPT_CONTROLS_RETARGET   , SETTINGS( controls[0].retarget           ), STR_OFF,       0, 1 ),
     OptionItem( OptionItem::TYPE_PARAM,  STR_OPT_CONTROLS_MULTIAIM   , SETTINGS( controls[0].multiaim           ), STR_OFF,       0, 1 ),
 #ifdef INV_GAMEPAD_ONLY
-    OptionItem( OptionItem::TYPE_PARAM,  STR_EMPTY                   , SETTINGS( playerIndex                    ), STR_OPT_CONTROLS_GAMEPAD,  0, 0 ),
+    OptionItem( OptionItem::TYPE_PARAM,  STR_EMPTY                   , SETTINGS( ctrlIndex                      ), STR_OPT_CONTROLS_KEYBOARD, 0, 0xFF ),
 #else
     OptionItem( OptionItem::TYPE_PARAM,  STR_EMPTY                   , SETTINGS( ctrlIndex                      ), STR_OPT_CONTROLS_KEYBOARD, 0, 1 ),
 #endif
@@ -201,8 +198,10 @@ static const OptionItem optControls[] = {
     OptionItem( OptionItem::TYPE_KEY,    STR_CTRL_FIRST + cAction    , SETTINGS( controls[0].keys[ cAction    ] ), STR_KEY_FIRST ),
     OptionItem( OptionItem::TYPE_KEY,    STR_CTRL_FIRST + cWeapon    , SETTINGS( controls[0].keys[ cWeapon    ] ), STR_KEY_FIRST ),
     OptionItem( OptionItem::TYPE_KEY,    STR_CTRL_FIRST + cLook      , SETTINGS( controls[0].keys[ cLook      ] ), STR_KEY_FIRST ),
+#if !(defined(INV_GAMEPAD_ONLY) && defined(INV_GAMEPAD_NO_TRIGGER))
     OptionItem( OptionItem::TYPE_KEY,    STR_CTRL_FIRST + cDuck      , SETTINGS( controls[0].keys[ cDuck      ] ), STR_KEY_FIRST ),
     OptionItem( OptionItem::TYPE_KEY,    STR_CTRL_FIRST + cDash      , SETTINGS( controls[0].keys[ cDash      ] ), STR_KEY_FIRST ),
+#endif
     OptionItem( OptionItem::TYPE_KEY,    STR_CTRL_FIRST + cRoll      , SETTINGS( controls[0].keys[ cRoll      ] ), STR_KEY_FIRST ),
     OptionItem( OptionItem::TYPE_KEY,    STR_CTRL_FIRST + cInventory , SETTINGS( controls[0].keys[ cInventory ] ), STR_KEY_FIRST ),
     OptionItem( OptionItem::TYPE_KEY,    STR_CTRL_FIRST + cStart     , SETTINGS( controls[0].keys[ cStart     ] ), STR_KEY_FIRST ),
@@ -222,6 +221,7 @@ struct Inventory {
     };
 
     IGame   *game;
+    Texture *title;
     Texture *background[3]; // [LEFT EYE or SINGLE, RIGHT EYE, TEMP]
     Video   *video;
 
@@ -416,7 +416,7 @@ struct Inventory {
                 case TR::Entity::INV_PASSPORT :
                     if (value != 0) return NULL;
                     optCount = optLoadSlots.length;
-                    return optLoadSlots;
+                    return optLoadSlots.items;
                 case TR::Entity::INV_DETAIL :
                     optCount = COUNT(optDetail);
                     return optDetail;
@@ -478,21 +478,21 @@ struct Inventory {
 
             opt = opt + slot;
 
-            uint8 &value = *(uint8*)(intptr_t(settings) + opt->offset);
+            uint8 &value = *((uint8*)settings + opt->offset);
 
             switch (key) {
                 case cAction : return (opt->type == OptionItem::TYPE_BUTTON || opt->type == OptionItem::TYPE_KEY) ? opt : NULL;
                 case cUp     : nextSlot(slot, -1); break;
                 case cDown   : nextSlot(slot, +1); break;
                 case cLeft   :
-                    if (opt->type == OptionItem::TYPE_PARAM && opt->checkValue(value - 1)) {
+                    if (opt->type == OptionItem::TYPE_PARAM && (opt->maxValue != 0xFF) && opt->checkValue(value - 1)) {
                         value--;
                         timer = 0.2f;
                         return opt;
                     }    
                     break;
                 case cRight  :
-                    if (opt->type == OptionItem::TYPE_PARAM && opt->checkValue(value + 1)) {
+                    if (opt->type == OptionItem::TYPE_PARAM && (opt->maxValue != 0xFF) && opt->checkValue(value + 1)) {
                         value++;
                         timer = 0.2f;
                         return opt;
@@ -544,7 +544,7 @@ struct Inventory {
 
             TR::Level *level = game->getLevel();
             TR::Model &m     = level->models[desc.model];
-            Basis joints[MAX_SPHERES];
+            Basis joints[MAX_JOINTS];
 
             mat4 matrix;
             matrix.identity();
@@ -579,7 +579,8 @@ struct Inventory {
         }
         inv->titleTimer = inv->game->getLevel()->isTitle() ? 0.0f : 3.0f;
 
-        inv->background[0] = Texture::Load(*stream);
+        inv->title = Texture::Load(*stream);
+        inv->background[0] = inv->title;
         delete stream;
     }
 
@@ -602,7 +603,7 @@ struct Inventory {
         }
     }
 
-    Inventory() : game(NULL), itemsCount(0) {
+    Inventory() : game(NULL), title(NULL), itemsCount(0) {
         memset(background, 0, sizeof(background));
         reset();
     }
@@ -617,10 +618,17 @@ struct Inventory {
             delete items[i];
         itemsCount = 0;
 
+        if (background[0] == title) {
+            background[0] = NULL;
+        }
+
         for (int i = 0; i < COUNT(background); i++) {
             delete background[i];
             background[i] = NULL;
         }
+
+        delete title;
+        title = NULL;
     }
 
     void reset() {
@@ -796,7 +804,7 @@ struct Inventory {
         }
 
         int pos = 0;
-        for (int pos = 0; pos < itemsCount; pos++)
+        for (; pos < itemsCount; pos++)
             if (items[pos]->type > type)
                 break;
 
@@ -1189,7 +1197,7 @@ struct Inventory {
         else if (Input::down[ikDown]  || joy.down[jkDown]  || joy.L.y >  0.5f)
             key = cDown;
 
-        #if defined(_OS_SWITCH) || defined(_OS_3DS)
+        #if defined(_OS_SWITCH) || defined(_OS_3DS) || defined(_OS_GCW0)
         // swap A/B keys for Nintendo (Japanese) UX style
         if (Input::touchTimerVis == 0.0f) {
             if (key == cAction) {
@@ -1379,32 +1387,39 @@ struct Inventory {
     }
 
     Texture* getBackgroundTarget(int view) {
-        if (background[0] && (background[0]->origWidth != INV_BG_SIZE || background[0]->origHeight != INV_BG_SIZE)) {
-            delete background[0];
+        if (background[0] == title) {
             background[0] = NULL;
         }
 
-        for (int i = 0; i < COUNT(background); i++)
-            if (!background[i])
-                background[i] = new Texture(INV_BG_SIZE, INV_BG_SIZE, 1, FMT_RGBA, OPT_TARGET);
+        for (int i = 0; i < COUNT(background); i++) {
+            if (!background[i]) {
+                background[i] = new Texture(INV_BG_SIZE, INV_BG_SIZE, 1, FMT_RGB16, OPT_TARGET);
+            }
+        }
 
         return background[view];
     }
 
     void blur(Texture *texInOut, Texture *tmp) {
+    #ifdef _GAPI_C3D
+        return; // TODO
+    #endif
     #ifdef FFP
         return; // TODO
     #endif
         game->setShader(Core::passFilter, Shader::FILTER_BLUR, false, false);
+        float s = 1.0f / INV_BG_SIZE;
         // vertical
         Core::setTarget(tmp, NULL, RT_STORE_COLOR);
-        Core::active.shader->setParam(uParam, vec4(0, 1.0f / INV_BG_SIZE, 0, 0));
+        Core::validateRenderState();
+        Core::active.shader->setParam(uParam, vec4(0, s, 0, s));
         texInOut->bind(sDiffuse);
         game->getMesh()->renderQuad();
         // horizontal
         Core::setTarget(texInOut, NULL, RT_STORE_COLOR);
+        Core::validateRenderState();
         game->setShader(Core::passFilter, Shader::FILTER_BLUR, false, false);
-        Core::active.shader->setParam(uParam, vec4(1.0f / INV_BG_SIZE, 0, 0, 0));
+        Core::active.shader->setParam(uParam, vec4(s, 0, 0, s));
         tmp->bind(sDiffuse);
         game->getMesh()->renderQuad();
     }
@@ -1413,36 +1428,35 @@ struct Inventory {
     #ifdef FFP
         return; // TODO
     #endif
+        float s = 1.0f / INV_BG_SIZE;
         game->setShader(Core::passFilter, Shader::FILTER_GRAYSCALE, false, false);
         Core::setTarget(texOut, NULL, RT_STORE_COLOR);
-        Core::active.shader->setParam(uParam, vec4(0.75f, 0.75f, 1.0f, 1.0f));
+        Core::validateRenderState();
+        Core::active.shader->setParam(uParam, vec4(0.75f, 0.75f, 1.0f, s));
         texIn->bind(sDiffuse);
         game->getMesh()->renderQuad();
     }
 
     void prepareBackground() {
+        #ifdef FFP
+            return;
+        #endif
+
         if (Core::settings.detail.stereo == Core::Settings::STEREO_VR)
             return;
 
-        #ifdef _OS_PSP
+        #ifdef _GAPI_GU
             return;
         #endif
 
         #ifdef _OS_3DS
-            return;
+            GAPI::rotate90 = false;
         #endif
 
         game->renderGame(false, true);
 
         Core::setDepthTest(false);
         Core::setBlendMode(bmNone);
-
-    #ifdef FFP
-        mat4 m;
-        m.identity();
-        Core::setViewProj(m, m);
-        Core::mModel.identity();
-    #endif
 
         int viewsCount = (Core::settings.detail.stereo == Core::Settings::STEREO_OFF) ? 1 : 2;
 
@@ -1457,6 +1471,10 @@ struct Inventory {
             grayscale(background[view], background[2]);
             swap(background[view], background[2]);
         }
+
+        #ifdef _OS_3DS
+            GAPI::rotate90 = true;
+        #endif
 
         Core::setDepthTest(true);
     }
@@ -1716,7 +1734,12 @@ struct Inventory {
             aspectSrc = ax = ay = 1.0f;
         }
 
-        float aspectDst = float(Core::width) / float(Core::height);
+        float aspectDst = float(Core::width) / float(Core::height) * Core::aspectFix;
+
+        #ifdef _OS_WP8
+            aspectDst = 1.0f / aspectDst;
+        #endif
+
         float aspectImg = aspectSrc / aspectDst;
 
         #ifdef FFP
@@ -1807,7 +1830,7 @@ struct Inventory {
         Core::setViewProj(mView, mProj);
 
         game->setShader(Core::passFilter, Shader::FILTER_UPSCALE, false, false);
-        Core::active.shader->setParam(uParam, vec4(float(Core::active.textures[sDiffuse]->width), float(Core::active.textures[sDiffuse]->height), Core::getTime() * 0.001f, 0.0f));
+        Core::active.shader->setParam(uParam, vec4(float(Core::active.textures[sDiffuse]->width), float(Core::active.textures[sDiffuse]->height), 0.0f, 0.0f));
         game->getMesh()->renderBuffer(indices, COUNT(indices), vertices, COUNT(vertices));
     }
 
@@ -1835,7 +1858,7 @@ struct Inventory {
         m.identity();
         Core::setViewProj(m, m);
         Core::mModel.identity();
-        Core::mModel.scale(vec3(1.0f / 32767.0f));
+
     #else
         if (Core::settings.detail.stereo == Core::Settings::STEREO_VR || !background[0]) {
             backTex = Core::blackTex; // black background 
@@ -1985,10 +2008,12 @@ struct Inventory {
         char buf[256];
         char time[16];
 
-        int secretsMax = 3;
-        int secrets = ((saveStats.secrets & 1) != 0) +
-                      ((saveStats.secrets & 2) != 0) +
-                      ((saveStats.secrets & 4) != 0);
+        int secretsMax = TR::LEVEL_INFO[saveStats.level].secrets;
+        int secrets = ((saveStats.secrets & (1 << 0)) != 0) +
+                      ((saveStats.secrets & (1 << 1)) != 0) +
+                      ((saveStats.secrets & (1 << 2)) != 0) + 
+                      ((saveStats.secrets & (1 << 3)) != 0) + 
+                      ((saveStats.secrets & (1 << 4)) != 0);
 
         int s = saveStats.time % 60;
         int m = saveStats.time / 60 % 60;
@@ -2056,7 +2081,7 @@ struct Inventory {
             const char *bSelect = STR[STR_KEY_FIRST + ikEnter];
             const char *bBack   = STR[STR_KEY_FIRST + Core::settings.controls[playerIndex].keys[cInventory].key];
 
-            #if defined(_OS_SWITCH) || defined(_OS_3DS)
+            #if defined(_OS_SWITCH) || defined(_OS_3DS) || defined(_OS_GCW0) || defined(_OS_XBOX) || defined(_OS_XB1)
                 bSelect = "A";
                 bBack   = "B";
             #endif

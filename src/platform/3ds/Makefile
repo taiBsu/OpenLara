@@ -33,7 +33,7 @@ include $(DEVKITARM)/3ds_rules
 #---------------------------------------------------------------------------------
 TARGET		:=	OpenLara
 BUILD		:=	build
-SOURCES		:=	. ../../libs/stb_vorbis ../../libs/tinf
+SOURCES		:=	. ../../libs/stb_vorbis ../../libs/tinf ../../shaders/pica
 DATA		:=	data
 INCLUDES	:=	../..
 GRAPHICS	:=	gfx
@@ -48,24 +48,21 @@ APP_DESCRIPTION := Classic Tomb Raider open-source engine
 #---------------------------------------------------------------------------------
 ARCH	:=	-march=armv6k -mtune=mpcore -mfloat-abi=hard -mtp=soft
 
-CFLAGS	:=	-g -w -Ofast -ffast-math -mword-relocations \
-			-fomit-frame-pointer -ffunction-sections \
-			$(ARCH)
-
-CFLAGS	+=	$(INCLUDE) -DARM11 -D_3DS -DPROFILE
+CFLAGS	:=	$(ARCH) -g0 -w -Ofast -ffast-math -mword-relocations -fomit-frame-pointer -ffunction-sections
+CFLAGS	+=	$(INCLUDE) -DARM11 -D_3DS
 
 CXXFLAGS	:= $(CFLAGS) -fno-rtti -fno-exceptions -std=gnu++11
 
 ASFLAGS	:=	-g $(ARCH)
 LDFLAGS	=	-specs=3dsx.specs -g $(ARCH) -Wl,-Map,$(notdir $*.map)
 
-LIBS	:= -lcitro3d -lctru -lm
+LIBS	:= -lcitro3d -lctru -lm -lvorbisidec -logg
 
 #---------------------------------------------------------------------------------
 # list of directories containing libraries, this must be the top level containing
 # include and lib
 #---------------------------------------------------------------------------------
-LIBDIRS	:= $(CTRULIB)
+LIBDIRS	:= $(CTRULIB) $(PORTLIBS)
 
 
 #---------------------------------------------------------------------------------

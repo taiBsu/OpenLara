@@ -1,15 +1,15 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 		<head>
 			<title>OpenLara</title>
+			<link href="/projects/OpenLara/favicon.ico" rel="shortcut icon" type="image/x-icon" />
 			<style>
 			html {
-				overflow: hidden;
+				overflow: auto;
 			}
 			body {
 				margin: 0px;
 				font-size: 1.0em;
-				overflow: hidden;
 			}
 			.game_fs {
 				position: fixed;
@@ -55,7 +55,7 @@
 				window.onload = function() { window.focus(); }
 				
 				var Module = {
-					TOTAL_MEMORY: 64*1024*1024,
+					TOTAL_MEMORY: 192*1024*1024,
 					preRun: [],
 					postRun: [],
 					print: (function() {
@@ -137,6 +137,14 @@
 						id = 9;
 					} else if (lang == "fi") {
                         id = 10;
+                    } else if (lang == "cs") {
+                        id = 11;
+                    } else if (lang == "zh") {
+                        id = 12;
+                    } else if (lang == "hu") {
+                        id = 13;
+                    } else if (lang == "sv") {
+                        id = 14;
                     }
 					Module.ccall('set_def_lang', 'null', ['number'], [id]);
 				}
@@ -166,8 +174,8 @@
 			</script>
 
 			<div id="info">
-				<input type="file" id="browseFile" style="display:none" accept=".phd,.psx, .tr2" onchange="readLevel(event)" />
-				<input type="button" value="Browse Level" onclick="document.getElementById('browseFile').click();" /> (.PHD, .PSX, .TR2)&nbsp;
+				<input type="file" id="browseFile" style="display:none" accept=".phd,.psx, .tr2, .tr4" onchange="readLevel(event)" />
+				<input type="button" value="Browse Level" onclick="document.getElementById('browseFile').click();" /> (.PHD, .PSX, .TR2, .TR4)&nbsp;
 				<!--
 				<input type="button" value="Backup Saves" onclick="backupSaves();" />
 				<input type="button" value="Restore Saves" onclick="restoreSaves();" />

@@ -9,7 +9,7 @@
 #define SUBTITLES_SPEED  0.1f
 #define TEXT_LINE_HEIGHT 18
 
-#ifdef _OS_PSV
+#if defined(_OS_TNS)
     #define UI_SHOW_FPS
 #endif
 
@@ -47,13 +47,14 @@ namespace UI {
 
     int advGlyphsStart;
 
-    #define RU_MAP              "ÁÃÄÆÇÈËÏÓÔÖ×ØÙÚÛÜİŞßáâãäæçêëìíïòôö÷øùúûüışÿ" "i~"
+    #define RU_MAP              "ÁÃÄÆÇÈËÏÓÔÖ×ØÙÚÛÜİŞßáâãäæçêëìíïòôö÷øùúûüışÿ" "i~\"^"
     #define RU_GLYPH_COUNT      (COUNT(RU_MAP) - 1)
     #define RU_GLYPH_START      102
     #define RU_GLYPH_UPPERCASE  20
-    #define CHAR_SPR_TILDA      (110 + RU_GLYPH_COUNT - 1)
-    #define CHAR_SPR_I          (CHAR_SPR_TILDA - 1)
-
+    #define CHAR_SPR_TILDA      154
+    #define CHAR_SPR_I          153
+    #define CHAR_SPR_QUOTE      155
+    #define CHAR_SPR_AUH        156
 
     const static uint8 char_width[110 + RU_GLYPH_COUNT] = {
         14, 11, 11, 11, 11, 11, 11, 13, 8, 11, 12, 11, 13, 13, 12, 11, 12, 12, 11, 12, 13, 13, 13, 12, 12, 11, // A-Z
@@ -65,8 +66,8 @@ namespace UI {
         11, 11, 11, 13, 10, 13, 11, 11, 12, 12, 11,  9, 13, 13, 10, 13, // ÁÃÄÆÇÈËÏÓÔÖ×ØÙÚÛ
          9, 11, 12, 11, 10,  9,  8, 10, 11,  9, 10, 10, 11,  9, 10, 12, // ÜİŞßáâãäæçêëìíïò
         10, 10,  9, 11, 12,  9, 11,  8,  9, 13,  9,                     // ôö÷øùúûüışÿ
-    // additional latin (i~)
-        5, 10
+    // additional
+        5, 10, 10, 10 // i~"^
     }; 
         
     static const uint8 char_map[102 + 33*2] = {
@@ -95,7 +96,7 @@ namespace UI {
     }
 
     inline bool skipChar(char c) {
-        return c == '~' || c == '$' || c == '(' || c == ')' || c == '|' || c == '}' || c == '*' || c == '{' || c == '+';
+        return c == '~' || c == '\"' || c == '^' || c == '$' || c == '(' || c == ')' || c == '|' || c == '}' || c == '*' || c == '{' || c == '+';
     }
 
     inline bool upperCase(int index) {
@@ -106,12 +107,12 @@ namespace UI {
         UI::advGlyphsStart = level.spriteTexturesCount;
 
     // init new sprites array with additional sprites
-        TR::TextureInfo *newSprites = new TR::TextureInfo[level.spriteTexturesCount + RU_GLYPH_COUNT + JA_GLYPH_COUNT + GR_GLYPH_COUNT];
+        TR::TextureInfo *newSprites = new TR::TextureInfo[level.spriteTexturesCount + RU_GLYPH_COUNT + JA_GLYPH_COUNT + GR_GLYPH_COUNT + CN_GLYPH_COUNT];
 
     // copy original sprites
         memcpy(newSprites, level.spriteTextures, sizeof(TR::TextureInfo) * level.spriteTexturesCount);
     // append russian glyphs
-        TR::TextureInfo *ruSprites = newSprites + level.spriteTexturesCount;
+        TR::TextureInfo *glyphSprite = newSprites + level.spriteTexturesCount;
         for (int i = 0; i < RU_GLYPH_COUNT; i++) {
             int idx = 110 + i; // mapped index
             int w = char_width[idx];
@@ -119,24 +120,27 @@ namespace UI {
             int o = 0;
             char c = RU_MAP[i];
 
-            if (c == 'á' || c == 'ä' || c == '~') h = 14;
+            if (c == 'á' || c == 'ä' || c == '~' || c == '\"') h = 14;
+            if (c == '^') h = 16;
             if (c == 'Ö' || c == 'Ù' || c == 'ö' || c == 'ù') { o = 1; h++; }
             if (c == 'ô') { o = 2; h += 2; }
 
-            ruSprites[i] = TR::TextureInfo(TR::TEX_TYPE_SPRITE, 0, -h + o, w, o, (i % 16) * 16, (i / 16) * 16 + (16 - h), w, h);
+            *glyphSprite++ = TR::TextureInfo(TR::TEX_TYPE_SPRITE, 0, -h + o, w, o, (i % 16) * 16, (i / 16) * 16 + (16 - h), w, h);
         }
     // append japanese glyphs
-        TR::TextureInfo *jaSprites = newSprites + level.spriteTexturesCount + RU_GLYPH_COUNT;
         for (int i = 0; i < JA_GLYPH_COUNT; i++) {
-            jaSprites[i] = TR::TextureInfo(TR::TEX_TYPE_SPRITE, 0, -16, 16, 0, (i % 16) * 16, ((i % 256) / 16) * 16, 16, 16);
+            *glyphSprite++ = TR::TextureInfo(TR::TEX_TYPE_SPRITE, 0, -16, 16, 0, (i % 16) * 16, ((i % 256) / 16) * 16, 16, 16);
         }
     // append greek glyphs
-        TR::TextureInfo *grSprites = newSprites + level.spriteTexturesCount + RU_GLYPH_COUNT + JA_GLYPH_COUNT;
         for (int i = 0; i < GR_GLYPH_COUNT; i++) {
-            grSprites[i] = TR::TextureInfo(TR::TEX_TYPE_SPRITE, 0, -16 + GR_GLYPH_BASE - 1, GR_GLYPH_WIDTH[i], 0 + GR_GLYPH_BASE - 1, (i % 16) * 16, ((i % 256) / 16) * 16, GR_GLYPH_WIDTH[i], 16);
+            *glyphSprite++ = TR::TextureInfo(TR::TEX_TYPE_SPRITE, 0, -16 + GR_GLYPH_BASE - 1, GR_GLYPH_WIDTH[i], 0 + GR_GLYPH_BASE - 1, (i % 16) * 16, ((i % 256) / 16) * 16, GR_GLYPH_WIDTH[i], 16);
+        }
+    // append chinese glyphs
+        for (int i = 0; i < CN_GLYPH_COUNT; i++) {
+            *glyphSprite++ = TR::TextureInfo(TR::TEX_TYPE_SPRITE, 0, -16, 16, 0, (i % 16) * 16, ((i % 256) / 16) * 16, 16, 16);
         }
 
-        level.spriteTexturesCount += RU_GLYPH_COUNT + JA_GLYPH_COUNT + GR_GLYPH_COUNT;
+        level.spriteTexturesCount += RU_GLYPH_COUNT + JA_GLYPH_COUNT + GR_GLYPH_COUNT + CN_GLYPH_COUNT;
 
         delete[] level.spriteTextures;
         TR::gSpriteTextures      = level.spriteTextures = newSprites;
@@ -145,7 +149,7 @@ namespace UI {
 
     bool isWideCharStart(char c) {
         int lang = Core::settings.audio.language + STR_LANG_EN;
-        if (lang == STR_LANG_JA || lang == STR_LANG_GR)
+        if (lang == STR_LANG_JA || lang == STR_LANG_GR || lang == STR_LANG_CN)
             return c == '\x11';
         return false;
     }
@@ -170,16 +174,19 @@ namespace UI {
             ASSERT(glyph < GR_GLYPH_COUNT);
             return GR_GLYPH_WIDTH[glyph];
         }
+        if (lang == STR_LANG_CN) {
+            ASSERT(glyph < CN_GLYPH_COUNT);
+            return 16;
+        }
         return 1;
     }
 
     int getWideCharGlyphIndex(uint16 glyph) {
         int lang = Core::settings.audio.language + STR_LANG_EN;
         glyph += UI::advGlyphsStart + RU_GLYPH_COUNT;
-        if (lang == STR_LANG_JA)
-            return glyph;
-        if (lang == STR_LANG_GR)
-            return glyph + JA_GLYPH_COUNT;
+        if (lang == STR_LANG_JA) return glyph; glyph += JA_GLYPH_COUNT;
+        if (lang == STR_LANG_GR) return glyph; glyph += GR_GLYPH_COUNT;
+        if (lang == STR_LANG_CN) return glyph; glyph += CN_GLYPH_COUNT;
         ASSERT(false);
         return glyph;
     }
@@ -260,6 +267,10 @@ namespace UI {
     void begin(float aspect) {
         ensureLanguage(Core::settings.audio.language);
 
+        #ifdef _OS_WP8
+            aspect = 1.0f / aspect;
+        #endif
+
         height = 480.0f;
         width  = height * aspect;
 
@@ -312,9 +323,9 @@ namespace UI {
     }
 
     void textOut(const vec2 &pos, const char *text, Align align = aLeft, float width = 0, uint8 alpha = 255, ShadeType shade = SHADE_ORANGE, bool isShadow = false) {
-        if (!text) return;
-       
         TR::Level *level = game->getLevel();
+
+        if (!text || level->extra.glyphs == -1) return;
 
         if (shade && !isShadow && ((level->version & TR::VER_TR3)))
             textOut(pos + vec2(1, 1), text, align, width, alpha, shade, true);
@@ -417,6 +428,8 @@ namespace UI {
             int frame = charRemap(charFrame);
             if (c == '+' && *text && *text != '@') frame = CHAR_SPR_TILDA;
             if (c == 'i' && skipChar(lastChar)) frame = CHAR_SPR_I;
+            if (c == '\"') frame = CHAR_SPR_QUOTE;
+            if (c == '^') frame = CHAR_SPR_AUH;
             lastChar = c;
 
             if (isShadow) {
@@ -510,6 +523,10 @@ namespace UI {
 
     void specOut(const vec2 &pos, char specChar) {
         TR::Level *level = game->getLevel();
+
+        if (level->extra.glyphs == -1)
+            return;
+
         MeshBuilder *mesh = game->getMesh();
 
         int seq = level->extra.glyphs;
@@ -662,14 +679,14 @@ namespace UI {
         Core::setBlendMode(bmPremult);
         Core::setCullMode(cmNone);
 
-        Core::mViewProj = GAPI::ortho(0.0f, float(Core::width), float(Core::height), 0.0f, 0.0f, 1.0f);
+        Core::mViewProj = GAPI::ortho(0.0f, float(Input::getTouchWidth()), float(Input::getTouchHeight()), 0.0f, 0.0f, 1.0f);
         
         game->setShader(Core::passGUI, Shader::DEFAULT);
 
-        float offset = Core::height * 0.25f;
+        float offset = Input::getTouchHeight() * 0.25f;
 
         if (Input::btnEnable[Input::bMove]) {
-            vec2 pos = vec2(offset * 0.7f, Core::height - offset * 0.7f) + vec2(-cosf(-PI * 3.0f / 4.0f), sinf(-PI * 3.0f / 4.0f)) * offset;
+            vec2 pos = vec2(offset * 0.7f, Input::getTouchHeight() - offset * 0.7f) + vec2(-cosf(-PI * 3.0f / 4.0f), sinf(-PI * 3.0f / 4.0f)) * offset;
             if (Input::down[Input::touchKey[Input::zMove]]) {
                 Input::Touch &t = Input::touch[Input::touchKey[Input::zMove] - ikTouchA];
                 renderControl(t.pos, Input::btnRadius, true);
@@ -755,6 +772,7 @@ namespace UI {
 
         game->setShader(Core::passCompose, Shader::ENTITY, false, false);
         Core::setMaterial(1.0f, 0.0f, 0.0f, 1.0f);
+        Core::setFog(FOG_NONE);
 
         vec4 o = vec4(offset, 0.0f);
 
@@ -785,13 +803,13 @@ namespace UI {
 
         mat4 mView = Core::mView;
         Core::mView.scale(vec3(0.5f));
-        Core::mView.translate(vec3(-Core::eye * CAM_EYE_SEPARATION, 0.0f, 0.0f));
+        //Core::mView.translate(vec3(-Core::eye * CAM_EYE_SEPARATION, 0.0f, 0.0f));
         Core::setViewProj(Core::mView, Core::mProj);
 
         vec3 lightOffset = vec3(UI::width - 64.0f, UI::height - 64.0f, 2048.0f);
         setupInventoryShading(lightOffset);
 
-        Basis joints[MAX_SPHERES];
+        Basis joints[MAX_JOINTS];
 
         Core::setDepthTest(true);
         Core::setDepthWrite(true);

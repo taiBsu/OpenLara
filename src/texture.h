@@ -8,11 +8,17 @@ struct Texture : GAPI::Texture {
 
     #ifdef SPLIT_BY_TILE
 
-        #ifdef _OS_PSP
-            TR::Tile4 *tiles;
-            TR::CLUT  *cluts;
+        #if defined(_GAPI_SW)
+            Tile8 *tiles;
 
-            Texture(TR::Tile4 *tiles, int tilesCount, TR::CLUT *cluts, int clutsCount) : GAPI::Texture(256, 256, OPT_PROXY) {
+            Texture(Tile8 *tiles, int tilesCount) : GAPI::Texture(256, 256, 1, OPT_PROXY) {
+                this->tiles = tiles;
+            }
+        #elif defined(_GAPI_GU)
+            Tile4 *tiles;
+            CLUT  *cluts;
+
+            Texture(Tile4 *tiles, int tilesCount, CLUT *cluts, int clutsCount) : GAPI::Texture(256, 256, 1, OPT_PROXY) {
                 #ifdef EDRAM_TEX
                     this->tiles = (TR::Tile4*)GAPI::allocEDRAM(tilesCount * sizeof(tiles[0]));
                     this->cluts =  (TR::CLUT*)GAPI::allocEDRAM(clutsCount * sizeof(cluts[0]));
@@ -37,17 +43,19 @@ struct Texture : GAPI::Texture {
                 uint32 *data;
             };
 
-            Texture(Tile *tiles, int tilesCount) : GAPI::Texture(256, 256, OPT_PROXY) {
+            Texture(Tile *tiles, int tilesCount) : GAPI::Texture(256, 256, 1, OPT_PROXY) {
                 memset(this->tiles, 0, sizeof(this->tiles));
 
                 ASSERT(tilesCount < COUNT(this->tiles));
                 for (int i = 0; i < tilesCount; i++)
-                    this->tiles[i] = new Texture(tiles[i].width, tiles[i].height, 1, FMT_RGBA, OPT_MIPMAPS, tiles[i].data);
+                    this->tiles[i] = new Texture(tiles[i].width, tiles[i].height, 1, FMT_RGBA, OPT_NEAREST, tiles[i].data);
             }
         #endif
 
         void bindTile(uint16 tile, uint16 clut) {
-        #ifdef _OS_PSP
+        #if defined(_GAPI_SW)
+            bindTileIndices(tiles + tile);
+        #elif defined(_GAPI_GU)
             bindTileCLUT(tiles + tile, cluts + clut);
         #else
             tiles[tile]->bind(0);
@@ -68,7 +76,7 @@ struct Texture : GAPI::Texture {
 
     Texture(int width, int height, int depth, TexFormat format, uint32 opt = 0, void *data = NULL) : GAPI::Texture(width, height, depth, opt) {
         #ifdef SPLIT_BY_TILE
-            #ifndef _OS_PSP
+            #if !defined(_GAPI_SW) && !defined(_GAPI_GU)
                 memset(this->tiles, 0, sizeof(tiles));
             #endif
         #endif
@@ -116,6 +124,10 @@ struct Texture : GAPI::Texture {
             this->opt &= ~OPT_VOLUME;
         }
 
+        if (this->opt & OPT_PROXY) {
+            return;
+        }
+
         init(data);
 
         if (mipmaps && width > Core::support.texMinSize && height > Core::support.texMinSize)
@@ -123,12 +135,17 @@ struct Texture : GAPI::Texture {
     }
 
     virtual ~Texture() {
-        #ifndef _OS_PSP
+        #if !defined(_GAPI_SW) && !defined(_GAPI_GU)
             #ifdef SPLIT_BY_TILE
                 for (int i = 0; i < COUNT(tiles); i++)
                     delete tiles[i];
             #endif
         #endif
+
+        if (this->opt & OPT_PROXY) {
+            return;
+        }
+
         deinit();
     }
 
@@ -281,10 +298,10 @@ struct Texture : GAPI::Texture {
         stream.read(height);
         stream.seek(2);
         stream.read(bpp);
-        stream.seek(4);
-        stream.read(size);
+        stream.seek(8);
         stream.seek(offset - stream.pos);
 
+        size = width * height * bpp >> 3;
         uint8 *data = new uint8[size];
         stream.raw(data, size);
 
@@ -630,8 +647,12 @@ struct Texture : GAPI::Texture {
     }
 
     static uint8* LoadBIN(Stream &stream, uint32 &width, uint32 &height) {
-        height = 224;
-        width  = stream.size / height / 2;
+        if (strstr(stream.name, "224.") || stream.size == 157696) {
+            height = 224;
+        } else {
+            height = 256;
+        }
+        width = stream.size / height / 2;
 
         uint8 *data = new uint8[stream.size];
         stream.raw(data, stream.size);
@@ -711,6 +732,7 @@ struct Texture : GAPI::Texture {
 
 
 struct Atlas {
+
     struct Tile {
         uint16          id;
         TR::TextureInfo *tex;
@@ -816,7 +838,7 @@ struct Atlas {
         return true;
     }
 
-    Texture* pack(bool mipmaps) {
+    Texture* pack(uint32 opt) {
     // TODO TR2 fix CUT2 AV
 //        width  = 4096;//nextPow2(int(sqrtf(float(size))));
 //        height = 2048;//(width * width / 2 > size) ? (width / 2) : width;
@@ -858,12 +880,12 @@ struct Atlas {
 
         delete[] indices;
 
-        uint32 *data = new uint32[width * height];
+        AtlasColor *data = new AtlasColor[width * height];
         memset(data, 0, width * height * sizeof(data[0]));
         fill(root, data);
         fillInstances();
 
-        Texture *atlas = new Texture(width, height, 1, FMT_RGBA, mipmaps ? OPT_MIPMAPS : 0, data);
+        Texture *atlas = new Texture(width, height, 1, ATLAS_FORMAT, opt, data);
 
         //Texture::SaveBMP("atlas", (char*)data, width, height);
 

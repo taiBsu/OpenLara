@@ -153,9 +153,9 @@ struct Flame : Sprite {
 
     Controller *owner;
     int32 jointIndex;
-    float sleep;
+    float sleepTime;
 
-    Flame(IGame *game, int entity) : Sprite(game, entity, false, Sprite::FRAME_ANIMATED), owner(NULL), jointIndex(0), sleep(0.0f) {
+    Flame(IGame *game, int entity) : Sprite(game, entity, false, Sprite::FRAME_ANIMATED), owner(NULL), jointIndex(0), sleepTime(0.0f) {
         time = randf() * 3.0f;
         activate();
     }
@@ -186,15 +186,15 @@ struct Flame : Sprite {
             lara->hit(FLAME_BURN_DAMAGE * Core::deltaTime, this);
         } else 
             if (lara->health > 0.0f) {
-                if (sleep > 0.0f)
-                    sleep = max(0.0f, sleep - Core::deltaTime);
+                if (sleepTime > 0.0f)
+                    sleepTime = max(0.0f, sleepTime - Core::deltaTime);
 
-                if (sleep == 0.0f && !lara->burn && lara->collide(Sphere(pos, 600.0f))) {
+                if (sleepTime == 0.0f && !lara->burn && lara->collide(Sphere(pos, 600.0f))) {
                     lara->hit(FLAME_HEAT_DAMAGE * Core::deltaTime, this);
 
                     if (lara->collide(Sphere(pos, 300.0f))) {
                         Flame::add(game, lara, 0);
-                        sleep = 3.0f; // stay inactive for 3 seconds
+                        sleepTime = 3.0f; // stay inactive for 3 seconds
                     }
                 }
             }
@@ -237,26 +237,41 @@ struct MuzzleFlash : Controller {
         timer = 0.0f;
     }
 
+    virtual bool getSaveData(SaveEntity &data) {
+        return false;
+    }
+
     virtual void update() {
+        if (!owner) {
+            game->removeEntity(this);
+            return;
+        }
+
         timer += Core::deltaTime;
         if (timer < MUZZLE_FLASH_TIME) {
             float intensity = clamp((MUZZLE_FLASH_TIME - timer) * 20.0f, EPS, 1.0f);
 
             vec4 lightPos   = vec4(owner->getJoint(joint).pos, 0);
             vec4 lightColor = FLASH_LIGHT_COLOR * vec4(intensity, intensity, intensity, 1.0f / sqrtf(intensity));
+
             if (lightIndex > -1) {
                 ASSERT(lightIndex + 1 < MAX_LIGHTS);
                 Core::lightPos[lightIndex]   = lightPos;
                 Core::lightColor[lightIndex] = lightColor;
-            } else
+            } else {
                 getRoom().addDynLight(owner->entity, lightPos, lightColor, true);
+            }
+
         } else {
+            
             if (lightIndex > -1) {
                 ASSERT(lightIndex < MAX_LIGHTS);
                 Core::lightPos[lightIndex]   = vec4(0);
                 Core::lightColor[lightIndex] = vec4(0, 0, 0, 1);
-            } else
+            } else {
                 getRoom().removeDynLight(owner->entity);
+            }
+
             game->removeEntity(this);
         }
     }
@@ -845,12 +860,12 @@ struct Drawbridge : Controller {
 
 #define CRYSTAL_LIGHT_RADIUS 1024.0f
 #define CRYSTAL_LIGHT_COLOR  vec4(0.1f, 0.1f, 3.0f, 1.0f / CRYSTAL_LIGHT_RADIUS)
+#define CRYSTAL_CUBEMAP_SIZE 64
 
 struct Crystal : Controller {
     Texture *environment;
 
-    Crystal(IGame *game, int entity) : Controller(game, entity) {
-        environment = new Texture(64, 64, 1, FMT_RGBA, OPT_CUBEMAP | OPT_MIPMAPS | OPT_TARGET);
+    Crystal(IGame *game, int entity) : Controller(game, entity), environment(NULL) {
         activate();
     }
 
@@ -875,9 +890,30 @@ struct Crystal : Controller {
     }
 
     virtual void render(Frustum *frustum, MeshBuilder *mesh, Shader::Type type, bool caustics) {
-        Core::setMaterial(0.5, 0.5, 3.0, 1.0f);
-        environment->bind(sEnvironment);
+        Core::setMaterial(0.5, 0.5, 3.0, 0.0f); // 0.0f - use vertex normal as texcoord
+        GAPI::Texture *dtex = Core::active.textures[sDiffuse];
+        if (environment) {
+            environment->bind(sDiffuse);
+        } else {
+            Core::whiteCube->bind(sDiffuse);
+        }
         Controller::render(frustum, mesh, type, caustics);
+        if (dtex) dtex->bind(sDiffuse);
+    }
+
+    void bake() {
+        ASSERT(!environment);
+
+        uint32 opt = OPT_CUBEMAP | OPT_TARGET;
+        #ifdef USE_CUBEMAP_MIPS
+            opt |= OPT_MIPMAPS;
+        #endif
+
+        environment = new Texture(CRYSTAL_CUBEMAP_SIZE, CRYSTAL_CUBEMAP_SIZE, 1, FMT_RGB16, opt);
+        game->renderEnvironment(getRoomIndex(), pos - vec3(0, 512, 0), &environment);
+        if (opt & OPT_MIPMAPS) {
+            environment->generateMipMap();
+        }
     }
 };
 
@@ -1193,7 +1229,7 @@ struct Lightning : Controller {
                     } else if (!hasTargets) {
                         target = pos + vec3(0.0f, 1024.0f, 0.0f);
                     } else
-                        target = getJoint(1 + int(randf() * 5)).pos;
+                        target = getJoint(1 + rand() % 5).pos;
                 }
                 game->playSound(TR::SND_LIGHTNING, pos, Sound::PAN);
             }
@@ -1270,7 +1306,7 @@ struct Lightning : Controller {
 
         if (depth > 0) {
             for (int i = 0; i < 2; i++) {
-                vec3 a = points[int(randf() * (count - 1))];
+                vec3 a = points[rand() % (count - 1)];
                 vec3 b = a;
                 b.x += (randf() - 0.5f) * spread;
                 b.y  = points[count - 1].y;
@@ -1326,7 +1362,6 @@ struct MidasHand : Controller {
 
         if (d.x < 512.0f && d.z < 512.0f) { // check for same sector
             lara->hit(1001.0f, this, TR::HIT_MIDAS);
-            deactivate(true);
             return;
         }
 

@@ -70,7 +70,7 @@ struct Mesh : GAPI::Mesh {
                 TR::Room::Data::Vertex &v = d.vertices[f.vertices[k]];\
                 Vertex &rv = _vertices[vCount++];\
                 rv.coord  = short4( v.pos.x,    v.pos.y,    v.pos.z,    0 );\
-                rv.normal = short4( f.normal.x, f.normal.y, f.normal.z, 0 );\
+                rv.normal = short4( f.normal.x, f.normal.y, f.normal.z, f.triangle ? 1 : 0 );\
                 rv.color  = ubyte4( 255, 255, 255, 255 );\
                 rv.light  = ubyte4( v.color.r, v.color.g, v.color.b, 255 );\
             }
@@ -166,6 +166,8 @@ struct MeshBuilder {
     struct ModelRange {
         int      parts[3][32];
         Geometry geometry[3];
+        int      vStart;
+        int      vCount;
     } *models;
 
 // procedured
@@ -260,8 +262,10 @@ struct MeshBuilder {
         }
 
     // get models info
+        int vStartModel = vCount;
         models = new ModelRange[level->modelsCount];
         for (int i = 0; i < level->modelsCount; i++) {
+            models[i].vStart = vCount;
             TR::Model &model = level->models[i];
             for (int j = 0; j < model.mCount; j++) {
                 int index = level->meshOffsets[model.mStart + j];
@@ -271,6 +275,8 @@ struct MeshBuilder {
                 iCount += (mesh.rCount * 6 + mesh.tCount * 3) * DOUBLE_SIDED;
                 vCount += (mesh.rCount * 4 + mesh.tCount * 3);
             }
+            models[i].vCount = vCount - models[i].vStart;
+            models[i].vStart -= vStartModel;
         }
 
     // shadow blob mesh (8 triangles, 8 vertices)
@@ -296,12 +302,12 @@ struct MeshBuilder {
         };
 
         const short4 boxCoords[] = {
-            {-1, -1,  1, 0}, { 1, -1,  1, 0}, { 1,  1,  1, 0}, {-1,  1,  1, 0},
-            { 1,  1,  1, 0}, { 1,  1, -1, 0}, { 1, -1, -1, 0}, { 1, -1,  1, 0},
-            {-1, -1, -1, 0}, { 1, -1, -1, 0}, { 1,  1, -1, 0}, {-1,  1, -1, 0},
-            {-1, -1, -1, 0}, {-1, -1,  1, 0}, {-1,  1,  1, 0}, {-1,  1, -1, 0},
-            { 1,  1,  1, 0}, {-1,  1,  1, 0}, {-1,  1, -1, 0}, { 1,  1, -1, 0},
-            {-1, -1, -1, 0}, { 1, -1, -1, 0}, { 1, -1,  1, 0}, {-1, -1,  1, 0},
+            short4(-1, -1,  1, 0), short4( 1, -1,  1, 0), short4( 1,  1,  1, 0), short4(-1,  1,  1, 0),
+            short4( 1,  1,  1, 0), short4( 1,  1, -1, 0), short4( 1, -1, -1, 0), short4( 1, -1,  1, 0),
+            short4(-1, -1, -1, 0), short4( 1, -1, -1, 0), short4( 1,  1, -1, 0), short4(-1,  1, -1, 0),
+            short4(-1, -1, -1, 0), short4(-1, -1,  1, 0), short4(-1,  1,  1, 0), short4(-1,  1, -1, 0),
+            short4( 1,  1,  1, 0), short4(-1,  1,  1, 0), short4(-1,  1, -1, 0), short4( 1,  1, -1, 0),
+            short4(-1, -1, -1, 0), short4( 1, -1, -1, 0), short4( 1, -1,  1, 0), short4(-1, -1,  1, 0),
         };
 
         iCount += COUNT(boxIndices);
@@ -342,8 +348,8 @@ struct MeshBuilder {
 
                 Geometry &geom = range.geometry[transp];
 
-            // rooms geometry
-                buildRoom(geom, range.dynamic[transp], blendMask, room, level, indices, vertices, iCount, vCount, vStartRoom);
+            // room geometry
+                buildRoom(geom, range.dynamic + transp, blendMask, room, level, indices, vertices, iCount, vCount, vStartRoom);
 
             // static meshes
                 for (int j = 0; j < room.meshesCount; j++) {
@@ -381,12 +387,11 @@ struct MeshBuilder {
         ASSERT(vCount - vStartRoom <= 0xFFFF);
 
     // build models geometry
-        int vStartModel = vCount;
+        vStartModel = vCount;
         aCount++;
 
         for (int i = 0; i < level->modelsCount; i++) {
             TR::Model &model = level->models[i];
-
             int vCountStart = vCount;
 
             for (int transp = 0; transp < 3; transp++) {
@@ -442,7 +447,11 @@ struct MeshBuilder {
                 }
             }
         }
-        ASSERT(vCount - vStartModel <= 0xFFFF);
+
+        weldSkinJoints(vertices + vStartModel, level->extra.laraSkin, level->extra.laraJoints);
+        weldSkinJoints(vertices + vStartModel, level->extra.braid,    level->extra.braid);
+
+        //ASSERT(vCount - vStartModel <= 0xFFFF);
 
     // build common primitives
         int vStartCommon = vCount;
@@ -453,7 +462,7 @@ struct MeshBuilder {
         shadowBlob.iCount = 8 * 3 * 3;
         for (int i = 0; i < 9; i++) {
             Vertex &v0 = vertices[vCount + i * 2 + 0];
-            v0.normal    = short4( 0, -1, 0, 32767 );
+            v0.normal    = short4( 0, -1, 0, 1 );
             v0.texCoord  = short4( whiteObject.texCoordAtlas[0].x, whiteObject.texCoordAtlas[0].y, 32767, 32767 );
             v0.color     = v0.light = ubyte4( 0, 0, 0, 0 );
 
@@ -529,7 +538,7 @@ struct MeshBuilder {
             Vertex &v = vertices[vCount + i];
             pos.rotate(cs);
             v.coord     = short4( short(pos.x), short(pos.y), 0, 1 );
-            v.normal    = short4( 0, 0, 0, 32767 );
+            v.normal    = short4( 0, 0, 0, 1 );
             v.texCoord  = short4( whiteSprite.texCoordAtlas[0].x, whiteSprite.texCoordAtlas[0].y, 32767, 32767 );
             v.color     = ubyte4( 255, 255, 255, 255 );
             v.light     = ubyte4( 255, 255, 255, 255 );
@@ -555,7 +564,7 @@ struct MeshBuilder {
         for (int i = 0; i < COUNT(boxCoords); i++) {
             Vertex &v = vertices[vCount++];
             v.coord    = boxCoords[i];
-            v.normal   = short4(0, 0, 0, 32767);
+            v.normal   = short4(0, 0, 0, 0);
             v.texCoord = short4(0, 0, 0, 0);
             v.color    = ubyte4(255, 255, 255, 255);
             v.light    = ubyte4(255, 255, 255, 255);
@@ -673,7 +682,7 @@ struct MeshBuilder {
         res.x += x;
         res.y += y;
         res.z += z;
-        res.w = joint;
+        res.w = joint * 2;
         return res;
     }
 
@@ -686,6 +695,69 @@ struct MeshBuilder {
                 return true;
         }
         return false;
+    }
+
+    void weldSkinJoints(Vertex *vertices, int16 skinIndex, int16 jointsIndex) {
+        if (skinIndex == -1 || jointsIndex == -1) {
+            return;
+        }
+
+        ASSERT(level->models[skinIndex].mCount == level->models[jointsIndex].mCount);
+
+        const TR::Model *model = level->models + skinIndex;
+        const TR::Node  *node  = (TR::Node*)&level->nodesData[model->node];//(TR::Node*)level->nodesData + model->node;
+
+        int sIndex = 0;
+        short4 stack[16];
+        short4 pos(0, 0, 0, 0);
+        short4 jointsPos[MAX_JOINTS];
+
+        for (int i = 0; i < model->mCount; i++) {
+            if (i > 0 && node) {
+                const TR::Node &t = node[i - 1];
+                if (t.flags & 0x01) pos = stack[--sIndex];
+                if (t.flags & 0x02) stack[sIndex++] = pos;
+                pos.x += t.x;
+                pos.y += t.y;
+                pos.z += t.z;
+            }
+            jointsPos[i] = pos;
+        }
+
+        const ModelRange &rangeSkin   = models[skinIndex];
+        const ModelRange &rangeJoints = models[jointsIndex];
+
+        #define COORD_FILL(VAR,RANGE)\
+            short4 *VAR = new short4[RANGE.vCount];\
+            for (int i = 0; i < RANGE.vCount; i++) {\
+                VAR[i] = vertices[RANGE.vStart + i].coord;\
+                int index = VAR[i].w / 2;\
+                VAR[i].x += jointsPos[index].x;\
+                VAR[i].y += jointsPos[index].y;\
+                VAR[i].z += jointsPos[index].z;\
+            }
+
+        COORD_FILL(vSkin,   rangeSkin);
+        COORD_FILL(vJoints, rangeJoints);
+
+        // bruteforce :(
+        for (int j = 0; j < rangeJoints.vCount; j++) {
+            for (int i = 0; i < rangeSkin.vCount; i++) {
+                if (//vSkin[i].w < vJoints[j].w &&
+                    abs(vSkin[i].x - vJoints[j].x) <= 1 &&
+                    abs(vSkin[i].y - vJoints[j].y) <= 1 &&
+                    abs(vSkin[i].z - vJoints[j].z) <= 1) { // compare position
+                    vertices[rangeJoints.vStart + j].coord  = vertices[rangeSkin.vStart + i].coord; // set bone index
+                    vertices[rangeJoints.vStart + j].normal = vertices[rangeSkin.vStart + i].normal;
+                    break;
+                }
+            }
+        }
+
+        delete[] vSkin;
+        delete[] vJoints;
+
+        #undef COORD_FILL
     }
 
     int calcWaterLevel(int16 roomIndex, bool flip) {
@@ -932,11 +1004,13 @@ struct MeshBuilder {
         return 1 << texAttribute;
     }
 
-    void buildRoom(Geometry &geom, Dynamic &dyn, int blendMask, const TR::Room &room, TR::Level *level, Index *indices, Vertex *vertices, int &iCount, int &vCount, int vStart) {
+    void buildRoom(Geometry &geom, Dynamic *dyn, int blendMask, const TR::Room &room, TR::Level *level, Index *indices, Vertex *vertices, int &iCount, int &vCount, int vStart) {
         const TR::Room::Data &d = room.data;
 
-        dyn.count = 0;
-        dyn.faces = NULL;
+        if (dyn) {
+            dyn->count = 0;
+            dyn->faces = NULL;
+        }
 
         for (int j = 0; j < d.fCount; j++) {
             TR::Face &f = d.faces[j];
@@ -951,9 +1025,9 @@ struct MeshBuilder {
             if (!(blendMask & getBlendMask(t.attribute)))
                 continue;
 
-            if (t.animated) {
-                ASSERT(dyn.count < 0xFFFF);
-                dyn.count++;
+            if (dyn && t.animated) {
+                ASSERT(dyn->count < 0xFFFF);
+                dyn->count++;
                 continue;
             }
 
@@ -964,9 +1038,9 @@ struct MeshBuilder {
         }
 
     // if room has non-static polygons, fill the list of dynamic faces
-        if (dyn.count) {
-            dyn.faces = new uint16[dyn.count];
-            dyn.count = 0;
+        if (dyn && dyn->count) {
+            dyn->faces = new uint16[dyn->count];
+            dyn->count = 0;
             for (int j = 0; j < d.fCount; j++) {
                 TR::Face        &f = d.faces[j];
                 TR::TextureInfo &t = level->objectTextures[f.flags.texture];
@@ -977,7 +1051,7 @@ struct MeshBuilder {
                     continue;
 
                 if (t.animated)
-                    dyn.faces[dyn.count++] = j;
+                    dyn->faces[dyn->count++] = j;
             }
         }
     }
@@ -988,12 +1062,16 @@ struct MeshBuilder {
         for (int j = 0; j < mesh.fCount; j++) {
             TR::Face &f = mesh.faces[j];
             ASSERT(f.colored || f.flags.texture < level->objectTexturesCount);
-            if (level->version & TR::VER_PSX) {
-                f.colored = false; // PSX version has colored textures
-            }
+            //if (level->version & TR::VER_PSX) {
+            //    f.colored = false; // PSX version has colored textures... not yet :)
+            //}
             TR::TextureInfo &t = f.colored ? (useRoomTex ? whiteRoom : whiteObject) : level->objectTextures[f.flags.texture];
 
             int texAttrib = forceOpaque ? 0 : t.attribute;
+
+            if (f.effects.additive) {
+                texAttrib = 2;
+            }
 
             if (texAttrib != 0)
                 isOpaque = false;
@@ -1017,9 +1095,9 @@ struct MeshBuilder {
 
                 vertices[vCount].coord  = transform(v.coord, joint, x, y, z, dir);
                 vec3 n = vec3(v.normal.x, v.normal.y, v.normal.z).normal() * 32767.0f;
-                v.normal = short4(short(n.x), short(n.y), short(n.z), 0);
+                v.normal = short4(short(n.x), short(n.y), short(n.z), f.triangle ? 1 : 0);
                 vertices[vCount].normal = rotate(v.normal, dir);
-                vertices[vCount].color  = ubyte4( c.r, c.g, c.b, 255 );
+                vertices[vCount].color  = ubyte4( c.r, c.g, c.b, c.a );
                 vertices[vCount].light  = ubyte4( light.r, light.g, light.b, 255 );
 
                 vCount++;
@@ -1450,7 +1528,8 @@ struct MeshBuilder {
         TR::Room::Data &d = level->rooms[roomIndex].data;
         for (int j = 0; j < d.sCount; j++) {
             TR::Room::Data::Sprite &f = d.sprites[j];
-            addDynSprite(f.texture, d.vertices[f.vertexIndex].pos, COLOR_WHITE, COLOR_WHITE);
+            TR::Room::Data::Vertex &v = d.vertices[f.vertexIndex];
+            addDynSprite(f.texture, d.vertices[f.vertexIndex].pos, false, false, v.color, v.color);
         }
 
         dynEnd();
@@ -1489,6 +1568,8 @@ struct MeshBuilder {
                     Core::mModel.identity();
                     Core::mModel.setRot(basis.rot);
                     Core::mModel.setPos(basis.pos);
+                #else
+                    Core::active.shader->setParam(uBasis, *(vec4*)&basis, 2);
                 #endif
             #endif
 

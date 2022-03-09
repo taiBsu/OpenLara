@@ -36,6 +36,10 @@ enum StringID {
     , STR_LANG_JA
     , STR_LANG_GR
     , STR_LANG_FI
+    , STR_LANG_CZ
+    , STR_LANG_CN
+    , STR_LANG_HU
+    , STR_LANG_SV
     , STR_APPLY
     , STR_GAMEPAD_1
     , STR_GAMEPAD_2
@@ -80,6 +84,11 @@ enum StringID {
     , STR_OPT_DETAIL_VSYNC
     , STR_OPT_DETAIL_STEREO
     , STR_OPT_SIMPLE_ITEMS
+    , STR_OPT_RESOLUTION
+    , STR_SCALE_100
+    , STR_SCALE_75
+    , STR_SCALE_50
+    , STR_SCALE_25
 // sound options
     , STR_SET_VOLUMES
     , STR_REVERBERATION
@@ -245,6 +254,12 @@ enum StringID {
     , STR_MAX
 };
 
+#ifdef _XBOX // TODO: illegal escape sequence
+    #define STR_RUSSIAN "Russian"
+#else
+    #define STR_RUSSIAN "–усски{и"
+#endif
+
 #define STR_LANGUAGES \
       "English"       \
     , "Fran|cais"     \
@@ -253,12 +268,16 @@ enum StringID {
     , "Italiano"      \
     , "Polski"        \
     , "Portugu(es"    \
-    , "–усски{и"      \
+    , STR_RUSSIAN     \
     , "\x11\x02\x70\x01\x97\x01\xD6\xFF\xFF" \
     , "\x11\x01\x22\x01\x0F\x01\x0F\x01\x0E\x01\x06\x01\x04\x01\x0C\x01\x0B\xFF\xFF" \
-    , "Suomi"
+    , "Suomi"         \
+    , "{Cesky"        \
+    , "\x11\x02\x8A\x02\x6C\x01\x54\x03\x02\xFF\xFF" \
+    , "Magyar" \
+    , "Svenska"
 
-#define LANG_PREFIXES "_EN", "_FR", "_DE", "_ES", "_IT", "_PL", "_PT", "_RU", "_JA", "_GR", "_FI"
+#define LANG_PREFIXES "_EN", "_FR", "_DE", "_ES", "_IT", "_PL", "_PT", "_RU", "_JA", "_GR", "_FI", "_CZ", "_CN", "_HU", "_SV"
 
 #define STR_KEYS \
       "NONE", "LEFT", "RIGHT", "UP", "DOWN", "SPACE", "TAB", "ENTER", "ESCAPE", "SHIFT", "CTRL", "ALT" \
@@ -270,10 +289,12 @@ enum StringID {
     , "-", "+", "<", ">", "/", "\\", ",", ".", "$", ":", "'", "PGUP", "PGDN", "HOME", "END", "DEL", "INS", "BKSP" \
     , "NONE", "A", "B", "X", "Y", "L BUMPER", "R BUMPER", "SELECT", "START", "L STICK", "R STICK", "L TRIGGER", "R TRIGGER", "D-LEFT", "D-RIGHT", "D-UP", "D-DOWN"
 
+#define STR_SCALE "25", "50", "75", "100"
+
 const char *helpText = 
     "Start - add second player or restore Lara@"
     "H - Show or hide this help@"
-    "ALT + ENTER - Fullscreen@"
+    "ALT and ENTER - Fullscreen@"
     "5 - Save Game@"
     "9 - Load Game@"
     "C - Look@"
@@ -287,7 +308,8 @@ const char *helpText =
     "Swan dive - Up & Walk & Jump@"
     "First Person View - Look & Action@"
     "DOZY on - Look & Duck & Action & Jump@"
-    "DOZY off - Walk";
+    "DOZY off - Walk@"
+    "Free Camera - hold L & R stick";
 
 #include "lang/en.h"
 #include "lang/fr.h"
@@ -300,6 +322,10 @@ const char *helpText =
 #include "lang/ja.h"
 #include "lang/gr.h"
 #include "lang/fi.h"
+#include "lang/cz.h"
+#include "lang/cn.h"
+#include "lang/hu.h"
+#include "lang/sv.h"
 
 char **STR = NULL;
 
@@ -315,6 +341,10 @@ void ensureLanguage(int lang) {
     ASSERT(COUNT(STR_JA) == STR_MAX);
     ASSERT(COUNT(STR_GR) == STR_MAX);
     ASSERT(COUNT(STR_FI) == STR_MAX);
+    ASSERT(COUNT(STR_CZ) == STR_MAX);
+    ASSERT(COUNT(STR_CN) == STR_MAX);
+    ASSERT(COUNT(STR_HU) == STR_MAX);
+    ASSERT(COUNT(STR_SV) == STR_MAX);
 
     lang += STR_LANG_EN;
 
@@ -329,6 +359,10 @@ void ensureLanguage(int lang) {
         case STR_LANG_JA : STR = (char**)STR_JA; break;
         case STR_LANG_GR : STR = (char**)STR_GR; break;
         case STR_LANG_FI : STR = (char**)STR_FI; break;
+        case STR_LANG_CZ : STR = (char**)STR_CZ; break;
+        case STR_LANG_CN : STR = (char**)STR_CN; break;
+        case STR_LANG_HU : STR = (char**)STR_HU; break;
+        case STR_LANG_SV : STR = (char**)STR_SV; break;
         default          : STR = (char**)STR_EN; break;
     }
 }
